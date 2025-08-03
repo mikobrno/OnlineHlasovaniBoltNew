@@ -45,7 +45,7 @@ Moderní webová aplikace pro správu hlasování ve společenstvích vlastník�
 
 2. **Instalace závislostí**
    ```bash
-   npm install
+   npm install ok
    ```
 
 3. **Konfigurace prostředí**
