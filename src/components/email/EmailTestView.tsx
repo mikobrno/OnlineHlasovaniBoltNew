@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Mail, Send, CheckCircle, AlertCircle, TestTube } from 'lucide-react';
+import { Mail, Send, CheckCircle, AlertCircle, TestTube, MessageSquare } from 'lucide-react';
 import { emailService } from '../../lib/emailService';
+import { smsService } from '../../lib/smsService';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
@@ -8,11 +9,19 @@ import { Input } from '../common/Input';
 
 export const EmailTestView: React.FC = () => {
   const { showToast } = useToast();
+  
+  // Email test state
   const [testEmail, setTestEmail] = useState('test@example.com');
   const [testSubject, setTestSubject] = useState('Test email z OnlineSpráva');
   const [testMessage, setTestMessage] = useState('<h1>Test email</h1><p>Toto je testovací email odeslaný přes N8N webhook z OnlineSpráva aplikace.</p>');
-  const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isTestingEmail, setIsTestingEmail] = useState(false);
+  const [emailTestResult, setEmailTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // SMS test state  
+  const [testPhone, setTestPhone] = useState('');
+  const [testSMSMessage, setTestSMSMessage] = useState('Testovací SMS z OnlineSpráva aplikace. SMS služba funguje správně!');
+  const [isTestingSMS, setIsTestingSMS] = useState(false);
+  const [smsTestResult, setSMSTestResult] = useState<{ success: boolean; message: string; details?: string } | null>(null);
 
   const handleTestEmail = async () => {
     if (!testEmail.trim()) {
@@ -20,8 +29,8 @@ export const EmailTestView: React.FC = () => {
       return;
     }
 
-    setIsTesting(true);
-    setTestResult(null);
+    setIsTestingEmail(true);
+    setEmailTestResult(null);
 
     try {
       const result = await emailService.sendEmail({
@@ -30,24 +39,55 @@ export const EmailTestView: React.FC = () => {
         html: testMessage
       });
 
-      setTestResult(result);
+      setEmailTestResult(result);
       
       if (result.success) {
         showToast('Test email byl úspěšně odeslán!', 'success');
       } else {
-        showToast(`Chyba při odesílání: ${result.message}`, 'error');
+        showToast(`Chyba při odesílání emailu: ${result.message}`, 'error');
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      setTestResult({ success: false, message: errorMessage });
-      showToast(`Chyba při odesílání: ${errorMessage}`, 'error');
+      setEmailTestResult({ success: false, message: errorMessage });
+      showToast(`Chyba při odesílání emailu: ${errorMessage}`, 'error');
     } finally {
-      setIsTesting(false);
+      setIsTestingEmail(false);
     }
   };
 
-  const handleTestConnection = async () => {
-    setIsTesting(true);
+  const handleTestSMS = async () => {
+    if (!testPhone.trim()) {
+      showToast('Zadejte telefonní číslo', 'error');
+      return;
+    }
+
+    setIsTestingSMS(true);
+    setSMSTestResult(null);
+
+    try {
+      const result = await smsService.sendSMS({
+        phoneNumber: testPhone,
+        message: testSMSMessage
+      });
+
+      setSMSTestResult(result);
+      
+      if (result.success) {
+        showToast('Test SMS byla úspěšně odeslána!', 'success');
+      } else {
+        showToast(`Chyba při odesílání SMS: ${result.message}`, 'error');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
+      setSMSTestResult({ success: false, message: errorMessage });
+      showToast(`Chyba při odesílání SMS: ${errorMessage}`, 'error');
+    } finally {
+      setIsTestingSMS(false);
+    }
+  };
+
+  const handleTestEmailConnection = async () => {
+    setIsTestingEmail(true);
     
     try {
       const isConnected = await emailService.testConnection();
@@ -57,11 +97,39 @@ export const EmailTestView: React.FC = () => {
       } else {
         showToast('Připojení k N8N webhook se nezdařilo', 'error');
       }
-    } catch (error) {
-      showToast('Chyba při testování připojení', 'error');
     } finally {
-      setIsTesting(false);
+      setIsTestingEmail(false);
     }
+  };
+
+  const handleTestSMSConnection = async () => {
+    setIsTestingSMS(true);
+    
+    try {
+      const isConnected = await smsService.testConnection();
+      
+      if (isConnected) {
+        showToast('Připojení k SMSbrana.cz je funkční!', 'success');
+      } else {
+        showToast('Připojení k SMSbrana.cz se nezdařilo', 'error');
+      }
+    } finally {
+      setIsTestingSMS(false);
+    }
+  };
+
+  const formatPhoneNumberInput = (value: string) => {
+    let formatted = value.replace(/[^\d]/g, '');
+    
+    if (formatted.length > 0 && !formatted.startsWith('420')) {
+      if (formatted.length <= 9) {
+        formatted = '+420 ' + formatted;
+      }
+    } else if (formatted.startsWith('420')) {
+      formatted = '+' + formatted.substring(0, 3) + ' ' + formatted.substring(3);
+    }
+    
+    return formatted;
   };
 
   return (

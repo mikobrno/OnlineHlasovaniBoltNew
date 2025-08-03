@@ -17,10 +17,16 @@ interface EmailResponse {
 
 export class EmailService {
   private config: EmailWebhookConfig;
+  private useProxy: boolean;
 
   constructor() {
+    // V development režimu používáme proxy, v produkci přímé volání
+    this.useProxy = import.meta.env.DEV;
+    
     this.config = {
-      webhookUrl: import.meta.env.VITE_N8N_WEBHOOK_URL || 'https://n8n.srv882016.hstgr.cloud/webhook/ada15a58-b14f-4179-92a1-780b009669a4'
+      webhookUrl: this.useProxy 
+        ? '/api/email' // Proxy endpoint
+        : (import.meta.env.VITE_N8N_WEBHOOK_URL || 'https://n8n.srv882016.hstgr.cloud/webhook/ada15a58-b14f-4179-92a1-780b009669a4')
     };
   }
 
@@ -33,10 +39,11 @@ export class EmailService {
     try {
       console.log('Odesílání emailu přes N8N webhook:', {
         url: this.config.webhookUrl,
+        useProxy: this.useProxy,
         data: emailData
       });
 
-      const response = await fetch(this.config.webhookUrl, {
+      const fetchOptions: RequestInit = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -47,21 +54,39 @@ export class EmailService {
           html: emailData.html,
           from: emailData.from || 'noreply@onlinesprava.cz'
         })
-      });
+      };
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      // Pokud nepoužíváme proxy, přidáme no-cors mode
+      if (!this.useProxy) {
+        fetchOptions.mode = 'no-cors';
       }
 
-      const result = await response.json();
-      
-      console.log('N8N webhook response:', result);
+      const response = await fetch(this.config.webhookUrl, fetchOptions);
 
-      return {
-        success: true,
-        message: 'Email byl úspěšně odeslán',
-        emailId: result.id || 'unknown'
-      };
+      if (this.useProxy) {
+        // S proxy můžeme číst response
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log('N8N webhook response:', result);
+
+        return {
+          success: true,
+          message: 'Email byl úspěšně odeslán přes proxy',
+          emailId: result.id || 'proxy-mode'
+        };
+      } else {
+        // S no-cors režimem nemůžeme číst response
+        console.log('Email požadavek odeslán do N8N webhook (no-cors režim)');
+
+        return {
+          success: true,
+          message: 'Email požadavek byl odeslán (no-cors režim)',
+          emailId: 'no-cors-mode'
+        };
+      }
 
     } catch (error) {
       console.error('Chyba při odesílání emailu přes N8N:', error);

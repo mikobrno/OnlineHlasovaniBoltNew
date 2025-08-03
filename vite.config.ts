@@ -24,7 +24,16 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    host: true
+    host: true,
+    proxy: {
+      // Proxy pro N8N webhook aby obešla CORS
+      '/api/email': {
+        target: 'https://n8n.srv882016.hstgr.cloud',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/email/, '/webhook/ada15a58-b14f-4179-92a1-780b009669a4'),
+        secure: true
+      }
+    }
   },
   preview: {
     port: 3000,

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AppNavigation } from './AppNavigation';
 import { VotesListView } from './voting/VotesListView';
 import { MembersView } from './members/MembersView';
-import { EmailTestView } from './email/EmailTestView';
+import { MessageTestView } from './communication/MessageTestView';
 import { AdminView } from './admin/AdminView';
 
 export const MainApp: React.FC = () => {
@@ -15,7 +15,7 @@ export const MainApp: React.FC = () => {
       case 'members':
         return <MembersView />;
       case 'emails':
-        return <EmailTestView />;
+        return <MessageTestView />;
       case 'admin':
         return <AdminView />;
       default:
