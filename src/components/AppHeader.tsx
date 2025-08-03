@@ -1,15 +1,23 @@
 import React from 'react';
-import { Building2, Sun, Moon } from 'lucide-react';
+import { Building2, Sun, Moon, LogOut, User } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import { useApp } from '../contexts/AppContextCompat';
+import { useAuth } from '../contexts/AuthContext';
+import { useApp } from '../contexts/AppContext';
 import { Button } from './common/Button';
 
 export const AppHeader: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
+  const { user, logout } = useAuth();
   const { selectedBuilding } = useApp();
 
   const handleLogoClick = () => {
     window.location.reload(); // Simple solution to reset state
+  };
+
+  const handleLogout = () => {
+    if (window.confirm('Opravdu se chcete odhlásit?')) {
+      logout();
+    }
   };
 
   return (
@@ -34,6 +42,22 @@ export const AppHeader: React.FC = () => {
           </div>
           
           <div className="flex items-center space-x-4">
+            {/* User info and logout */}
+            <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
+              <User className="h-4 w-4" />
+              <span className="text-sm">{user?.email}</span>
+            </div>
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              title="Odhlásit se"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="sr-only">Odhlásit se</span>
+            </Button>
+            
             <Button
               variant="ghost"
               size="sm"
