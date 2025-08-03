@@ -1,15 +1,15 @@
 import React from 'react';
 import { Building2, Sun, Moon } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import { useApp } from '../contexts/AppContext';
+import { useApp } from '../contexts/AppContextCompat';
 import { Button } from './common/Button';
 
 export const AppHeader: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
-  const { selectedBuilding, selectBuilding } = useApp();
+  const { selectedBuilding } = useApp();
 
   const handleLogoClick = () => {
-    selectBuilding(null as any);
+    window.location.reload(); // Simple solution to reset state
   };
 
   return (

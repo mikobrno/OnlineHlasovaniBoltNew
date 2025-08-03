@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ArrowLeft, Wand2, Eye, Copy, Plus, Trash2 } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
+import { useApp } from '../../contexts/AppContextCompat';
 import { useToast } from '../../contexts/ToastContext';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';

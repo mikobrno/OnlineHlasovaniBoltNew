@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Save, RotateCcw, Eye, EyeOff, Plus, Trash2, Edit } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
+import { useApp } from '../../contexts/AppContextCompat';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';

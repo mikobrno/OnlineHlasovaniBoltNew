@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Edit, Trash2, ArrowLeft } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
+import { useApp } from '../../contexts/AppContextCompat';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { BuildingEditor } from './BuildingEditor';

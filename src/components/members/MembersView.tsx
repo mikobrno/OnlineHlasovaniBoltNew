@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Upload, Search } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
+import { useApp } from '../../contexts/AppContextCompat';
 import { PageHeader } from '../common/PageHeader';
 import { Input } from '../common/Input';
 import { Card } from '../common/Card';

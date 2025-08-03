@@ -6,9 +6,10 @@ interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
   size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
-  onClick?: () => void;
+  onClick?: (e?: React.MouseEvent<HTMLButtonElement>) => void;
   type?: 'button' | 'submit' | 'reset';
   className?: string;
+  title?: string;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -18,7 +19,8 @@ export const Button: React.FC<ButtonProps> = ({
   disabled = false,
   onClick,
   type = 'button',
-  className
+  className,
+  title
 }) => {
   const baseClasses = 'inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none';
   
@@ -40,6 +42,7 @@ export const Button: React.FC<ButtonProps> = ({
       type={type}
       disabled={disabled}
       onClick={onClick}
+      title={title}
       className={cn(
         baseClasses,
         variantClasses[variant],

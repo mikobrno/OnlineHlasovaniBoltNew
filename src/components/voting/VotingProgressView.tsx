@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Vote } from '../../data/mockData';
-import { useApp } from '../../contexts/AppContext';
+import { useApp } from '../../contexts/AppContextCompat';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { calculateQuorum } from '../../lib/utils';

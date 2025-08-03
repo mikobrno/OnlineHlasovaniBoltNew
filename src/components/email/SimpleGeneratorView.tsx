@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
-import { useApp } from '../../contexts/AppContext';
+import { useApp } from '../../contexts/AppContextCompat';
 import { PageHeader } from '../common/PageHeader';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';

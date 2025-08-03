@@ -1,6 +1,6 @@
 import React from 'react';
 import { Building2, Plus, MapPin, Users, Settings } from 'lucide-react';
-import { useApp } from '../contexts/AppContext';
+import { useApp } from '../contexts/AppContextCompat';
 import { Card } from './common/Card';
 import { Button } from './common/Button';
 import { BuildingManager } from './admin/BuildingManager';
@@ -104,7 +104,7 @@ export const BuildingSelector: React.FC = () => {
 
               <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                 <Button variant="secondary" size="sm" className="w-full" onClick={(e) => {
-                  e.stopPropagation();
+                  e?.stopPropagation();
                   setShowBuildingEditor(true);
                 }}>
                   <Plus className="w-4 h-4 mr-2" />

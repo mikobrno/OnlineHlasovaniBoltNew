@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Mail, Trash2, Eye } from 'lucide-react';
 import { Vote, Observer } from '../../data/mockData';
-import { useApp } from '../../contexts/AppContext';
+import { useApp } from '../../contexts/AppContextCompat';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';

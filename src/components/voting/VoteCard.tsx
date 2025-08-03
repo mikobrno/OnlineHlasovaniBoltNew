@@ -4,7 +4,7 @@ import { Vote } from '../../data/mockData';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { formatDate, getVoteStatusText, getVoteStatusColor } from '../../lib/utils';
-import { useApp } from '../../contexts/AppContext';
+import { useApp } from '../../contexts/AppContextCompat';
 import { useToast } from '../../contexts/ToastContext';
 
 interface VoteCardProps {
