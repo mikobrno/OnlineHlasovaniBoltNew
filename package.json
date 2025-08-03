@@ -1,8 +1,9 @@
 {
-  "name": "vite-react-typescript-starter",
+  "name": "online-hlasovani-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
+  "homepage": "https://mikobrno.github.io/OnlineHlasovaniBoltNew/",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
