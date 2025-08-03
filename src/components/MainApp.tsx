@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AppNavigation } from './AppNavigation';
 import { VotesListView } from './voting/VotesListView';
 import { MembersView } from './members/MembersView';
-import { SimpleGeneratorView } from './email/SimpleGeneratorView';
+import { EmailTestView } from './email/EmailTestView';
 import { AdminView } from './admin/AdminView';
 
 export const MainApp: React.FC = () => {
@@ -15,7 +15,7 @@ export const MainApp: React.FC = () => {
       case 'members':
         return <MembersView />;
       case 'emails':
-        return <SimpleGeneratorView />;
+        return <EmailTestView />;
       case 'admin':
         return <AdminView />;
       default:

@@ -8,6 +8,7 @@ import { Button } from '../common/Button';
 import { Card } from '../common/Card';
 import { votingTokenService } from '../../lib/votingTokenService';
 import { smsService } from '../../lib/smsService';
+import { emailService } from '../../lib/emailService';
 import { replaceVariables } from '../../lib/utils';
 
 interface VotingInvitationModalProps {
@@ -75,8 +76,16 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
         customVariables
       );
 
-      // Simulate email sending (in real app, this would be actual email service)
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Odesílání emailu přes N8N webhook
+      const emailResult = await emailService.sendEmail({
+        to: member.email,
+        subject: emailSubject,
+        html: emailBody
+      });
+
+      if (!emailResult.success) {
+        throw new Error(emailResult.message);
+      }
       
       setSendingStatus(prev => ({ ...prev, [memberId]: 'sent' }));
       return true;

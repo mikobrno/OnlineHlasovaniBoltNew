@@ -7,6 +7,7 @@ import { useToast } from '../../contexts/ToastContext';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
+import { emailService } from '../../lib/emailService';
 import { calculateQuorum, replaceVariables } from '../../lib/utils';
 
 interface SendMinutesModalProps {
@@ -168,8 +169,16 @@ Použij formální jazyk odpovídající právním předpisům ČR pro SVJ/BD.
         customVariables
       );
 
-      // Simulate email sending
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Odesílání emailu přes N8N webhook
+      const emailResult = await emailService.sendEmail({
+        to: recipient.email,
+        subject: emailSubject,
+        html: emailBody
+      });
+
+      if (!emailResult.success) {
+        throw new Error(emailResult.message);
+      }
       
       setSendingStatus(prev => ({ ...prev, [recipientId]: 'sent' }));
       return true;
