@@ -1,5 +1,5 @@
--- SQL schema pro Supabase databázi - KOMPLETNÍ FUNKCIONALITA
--- Tento soubor obsahuje všechny potřebné tabulky a konfigurace pro plnou funkcionalnost aplikace
+-- SQL schema pro Supabase databázi - BEZPEČNÁ VERZE
+-- Tento soubor obsahuje všechny potřebné tabulky pro plnou funkcionalnost aplikace
 
 -- Zapnutí RLS (Row Level Security)
 ALTER DATABASE postgres SET row_security = on;
@@ -365,19 +365,20 @@ CREATE TABLE IF NOT EXISTS manual_vote_notes (
   UNIQUE(vote_id, member_id)
 );
 
+-- ========================================
+-- INDEXY PRO VÝKON
+-- ========================================
+
 -- Vytvoření indexů pro lepší výkon
 CREATE INDEX IF NOT EXISTS idx_members_building_id ON members(building_id);
 CREATE INDEX IF NOT EXISTS idx_members_email ON members(email);
-CREATE INDEX IF NOT EXISTS idx_members_active ON members(is_active);
 CREATE INDEX IF NOT EXISTS idx_members_role ON members(role);
 CREATE INDEX IF NOT EXISTS idx_votes_building_id ON votes(building_id);
 CREATE INDEX IF NOT EXISTS idx_votes_status ON votes(status);
-CREATE INDEX IF NOT EXISTS idx_votes_active ON votes(status, start_date, end_date);
 CREATE INDEX IF NOT EXISTS idx_questions_vote_id ON questions(vote_id);
 CREATE INDEX IF NOT EXISTS idx_questions_type ON questions(question_type);
 CREATE INDEX IF NOT EXISTS idx_voting_tokens_token ON voting_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_voting_tokens_vote_member ON voting_tokens(vote_id, member_id);
-CREATE INDEX IF NOT EXISTS idx_voting_tokens_active ON voting_tokens(is_verified, is_used, expires_at);
 CREATE INDEX IF NOT EXISTS idx_member_votes_vote_member ON member_votes(vote_id, member_id);
 CREATE INDEX IF NOT EXISTS idx_member_votes_question ON member_votes(question_id);
 CREATE INDEX IF NOT EXISTS idx_member_votes_delegated ON member_votes(is_delegated);
@@ -385,9 +386,7 @@ CREATE INDEX IF NOT EXISTS idx_observers_building_id ON observers(building_id);
 CREATE INDEX IF NOT EXISTS idx_vote_delegations_vote ON vote_delegations(vote_id);
 CREATE INDEX IF NOT EXISTS idx_vote_delegations_delegator ON vote_delegations(delegator_id);
 CREATE INDEX IF NOT EXISTS idx_vote_delegations_delegate ON vote_delegations(delegate_id);
-CREATE INDEX IF NOT EXISTS idx_vote_delegations_active ON vote_delegations(vote_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(recipient_id, is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_vote ON notifications(vote_id);
 CREATE INDEX IF NOT EXISTS idx_sms_verifications_member_vote ON sms_verifications(member_id, vote_id);
 CREATE INDEX IF NOT EXISTS idx_sms_verifications_token ON sms_verifications(token_hash);
@@ -405,83 +404,9 @@ CREATE INDEX IF NOT EXISTS idx_proxy_votes_represented ON proxy_votes(represente
 CREATE INDEX IF NOT EXISTS idx_attachments_entity ON attachments(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_attachments_public ON attachments(is_public);
 
--- Vytvoření trigger funkcí pro automatické aktualizace
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Funkce pro automatické přepočítání statistik hlasování
-CREATE OR REPLACE FUNCTION update_vote_statistics()
-RETURNS TRIGGER AS $$
-DECLARE
-    vote_record_id UUID;
-BEGIN
-    -- Získání vote_id z NEW nebo OLD záznamu
-    vote_record_id := COALESCE(NEW.vote_id, OLD.vote_id);
-    
-    -- Aktualizace základních statistik hlasování
-    UPDATE votes SET 
-        vote_statistics = jsonb_build_object(
-            'total_votes', (SELECT COUNT(*) FROM member_votes WHERE vote_id = vote_record_id),
-            'total_voting_power', (SELECT COALESCE(SUM(voting_power_used), 0) FROM member_votes WHERE vote_id = vote_record_id),
-            'last_vote_cast', NOW()
-        )
-    WHERE id = vote_record_id;
-    
-    RETURN COALESCE(NEW, OLD);
-END;
-$$ language 'plpgsql';
-
--- Funkce pro audit log
-CREATE OR REPLACE FUNCTION create_audit_log()
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO audit_log (
-        entity_type, 
-        entity_id, 
-        action, 
-        actor_type, 
-        old_data, 
-        new_data,
-        changes
-    ) VALUES (
-        TG_TABLE_NAME,
-        COALESCE(NEW.id, OLD.id),
-        CASE TG_OP 
-            WHEN 'INSERT' THEN 'create'
-            WHEN 'UPDATE' THEN 'update'
-            WHEN 'DELETE' THEN 'delete'
-        END,
-        'system',
-        CASE TG_OP WHEN 'DELETE' THEN row_to_json(OLD) ELSE NULL END,
-        CASE TG_OP WHEN 'INSERT' THEN row_to_json(NEW) ELSE row_to_json(NEW) END,
-        CASE TG_OP WHEN 'UPDATE' THEN 
-            jsonb_build_object('old', row_to_json(OLD), 'new', row_to_json(NEW))
-        ELSE NULL END
-    );
-    RETURN COALESCE(NEW, OLD);
-END;
-$$ language 'plpgsql';
-
--- Vytvoření triggerů pro updated_at
-CREATE TRIGGER update_buildings_updated_at BEFORE UPDATE ON buildings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_members_updated_at BEFORE UPDATE ON members FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_email_templates_updated_at BEFORE UPDATE ON email_templates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_global_variables_updated_at BEFORE UPDATE ON global_variables FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Triggery pro audit log (na vybraných tabulkách)
-CREATE TRIGGER audit_buildings AFTER INSERT OR UPDATE OR DELETE ON buildings FOR EACH ROW EXECUTE FUNCTION create_audit_log();
-CREATE TRIGGER audit_members AFTER INSERT OR UPDATE OR DELETE ON members FOR EACH ROW EXECUTE FUNCTION create_audit_log();
-CREATE TRIGGER audit_votes AFTER INSERT OR UPDATE OR DELETE ON votes FOR EACH ROW EXECUTE FUNCTION create_audit_log();
-CREATE TRIGGER audit_member_votes AFTER INSERT OR UPDATE OR DELETE ON member_votes FOR EACH ROW EXECUTE FUNCTION create_audit_log();
-CREATE TRIGGER audit_vote_delegations AFTER INSERT OR UPDATE OR DELETE ON vote_delegations FOR EACH ROW EXECUTE FUNCTION create_audit_log();
-
--- Trigger pro aktualizaci statistik hlasování
-CREATE TRIGGER update_vote_stats AFTER INSERT OR UPDATE OR DELETE ON member_votes FOR EACH ROW EXECUTE FUNCTION update_vote_statistics();
+-- ========================================
+-- RLS POLICIES
+-- ========================================
 
 -- Povolení RLS na všech tabulkách
 ALTER TABLE buildings ENABLE ROW LEVEL SECURITY;
@@ -561,6 +486,10 @@ CREATE POLICY "Allow SMS verification for voting" ON sms_verifications FOR ALL U
 CREATE POLICY "Allow public attachment read" ON attachments FOR SELECT USING (is_public = true);
 CREATE POLICY "Allow attachment management" ON attachments FOR ALL USING (true);
 
+-- ========================================
+-- ZÁKLADNÍ DATA
+-- ========================================
+
 -- Vložení rozšířených globálních proměnných
 INSERT INTO global_variables (name, description, value, is_editable) VALUES
 ('nazev_spolecnosti', 'Název správcovské společnosti', 'OnlineSprava s.r.o.', true),
@@ -625,173 +554,5 @@ UPDATE building_variable_definitions
 SET options = '{"Vážení vlastníci", "Vážení družstevníci", "Vážení členové", "Vážené dámy a pánové"}'
 WHERE name = 'osloveni';
 
--- ========================================
--- POKROČILÉ VIEWS PRO REPORTING
--- ========================================
-
--- View pro statistiky hlasování
-CREATE OR REPLACE VIEW vote_statistics_view AS
-SELECT 
-    v.id,
-    v.title,
-    v.status,
-    v.building_id,
-    b.name as building_name,
-    COUNT(DISTINCT m.id) as total_eligible_voters,
-    COUNT(DISTINCT mv.member_id) as voted_members,
-    COALESCE(SUM(mv.voting_power_used), 0) as total_voting_power_used,
-    COUNT(DISTINCT vd.delegator_id) as delegated_votes,
-    ROUND(
-        (COUNT(DISTINCT mv.member_id)::decimal / NULLIF(COUNT(DISTINCT m.id), 0)) * 100, 
-        2
-    ) as participation_rate
-FROM votes v
-JOIN buildings b ON v.building_id = b.id
-LEFT JOIN members m ON m.building_id = v.building_id
-LEFT JOIN member_votes mv ON mv.vote_id = v.id
-LEFT JOIN vote_delegations vd ON vd.vote_id = v.id
-GROUP BY v.id, v.title, v.status, v.building_id, b.name;
-
--- View pro delegování a zastupování
-CREATE OR REPLACE VIEW delegation_overview AS
-SELECT 
-    vd.vote_id,
-    v.title as vote_title,
-    delegator.name as delegator_name,
-    delegator.unit as delegator_unit,
-    delegate.name as delegate_name,
-    delegate.unit as delegate_unit,
-    delegator.vote_weight as delegated_voting_power,
-    vd.created_at as delegation_created,
-    vd.is_active
-FROM vote_delegations vd
-JOIN votes v ON vd.vote_id = v.id
-JOIN members delegator ON vd.delegator_id = delegator.id
-JOIN members delegate ON vd.delegate_id = delegate.id;
-
--- View pro audit trail
-CREATE OR REPLACE VIEW audit_summary AS
-SELECT 
-    al.*,
-    CASE 
-        WHEN al.actor_id IS NOT NULL THEN m.name
-        ELSE al.actor_name
-    END as actor_display_name
-FROM audit_log al
-LEFT JOIN members m ON al.actor_id = m.id
-ORDER BY al.created_at DESC;
-
--- ========================================
--- STORED PROCEDURES PRO POKROČILÉ OPERACE
--- ========================================
-
--- Funkce pro výpočet kvóra
-CREATE OR REPLACE FUNCTION calculate_quorum(
-    vote_id_param UUID,
-    question_id_param UUID
-) RETURNS TABLE (
-    required_votes DECIMAL,
-    current_votes DECIMAL,
-    quorum_met BOOLEAN
-) AS $$
-DECLARE
-    question_record RECORD;
-    total_eligible_power DECIMAL;
-    current_voting_power DECIMAL;
-    required_power DECIMAL;
-BEGIN
-    -- Získání informací o otázce
-    SELECT * INTO question_record FROM questions WHERE id = question_id_param;
-    
-    -- Výpočet celkové oprávněné hlasovací síly
-    SELECT COALESCE(SUM(m.vote_weight), 0) INTO total_eligible_power
-    FROM members m
-    JOIN votes v ON m.building_id = v.building_id
-    WHERE v.id = vote_id_param;
-    
-    -- Výpočet aktuální hlasovací síly
-    SELECT COALESCE(SUM(voting_power_used), 0) INTO current_voting_power
-    FROM member_votes mv
-    WHERE mv.vote_id = vote_id_param AND mv.question_id = question_id_param;
-    
-    -- Výpočet požadované hlasovací síly podle typu kvóra
-    CASE question_record.quorum_type
-        WHEN 'simple' THEN 
-            required_power := total_eligible_power * 0.5;
-        WHEN 'qualified' THEN 
-            required_power := total_eligible_power * 0.67;
-        WHEN 'unanimous' THEN 
-            required_power := total_eligible_power;
-        WHEN 'custom' THEN 
-            required_power := total_eligible_power * 
-                (question_record.custom_quorum_numerator::decimal / question_record.custom_quorum_denominator::decimal);
-        ELSE 
-            required_power := total_eligible_power * 0.5;
-    END CASE;
-    
-    RETURN QUERY SELECT 
-        required_power,
-        current_voting_power,
-        current_voting_power >= required_power;
-END;
-$$ LANGUAGE plpgsql;
-
--- Funkce pro automatické dokončení hlasování
-CREATE OR REPLACE FUNCTION auto_complete_vote(vote_id_param UUID) 
-RETURNS BOOLEAN AS $$
-DECLARE
-    vote_record RECORD;
-    all_quorums_met BOOLEAN := true;
-    question_record RECORD;
-    quorum_result RECORD;
-BEGIN
-    -- Získání informací o hlasování
-    SELECT * INTO vote_record FROM votes WHERE id = vote_id_param;
-    
-    -- Kontrola, zda hlasování může být dokončeno
-    IF vote_record.status != 'active' OR vote_record.end_date > NOW() THEN
-        RETURN false;
-    END IF;
-    
-    -- Kontrola kvóra pro všechny otázky
-    FOR question_record IN SELECT * FROM questions WHERE vote_id = vote_id_param LOOP
-        SELECT * INTO quorum_result FROM calculate_quorum(vote_id_param, question_record.id);
-        
-        IF NOT quorum_result.quorum_met THEN
-            all_quorums_met := false;
-            EXIT;
-        END IF;
-    END LOOP;
-    
-    -- Dokončení hlasování pokud jsou splněny podmínky
-    IF all_quorums_met OR vote_record.end_date <= NOW() THEN
-        UPDATE votes SET 
-            status = 'completed',
-            completed_at = NOW()
-        WHERE id = vote_id_param;
-        
-        -- Vytvoření analytics záznamu
-        INSERT INTO vote_analytics (vote_id, building_id, total_eligible_voters, total_votes_cast)
-        SELECT 
-            vote_id_param,
-            vote_record.building_id,
-            COUNT(DISTINCT m.id),
-            COUNT(DISTINCT mv.member_id)
-        FROM members m
-        LEFT JOIN member_votes mv ON mv.vote_id = vote_id_param
-        WHERE m.building_id = vote_record.building_id;
-        
-        RETURN true;
-    END IF;
-    
-    RETURN false;
-END;
-$$ LANGUAGE plpgsql;
-
--- Vytvoření bucket pro přílohy (musí být spuštěno v Supabase dashboard)
--- INSERT INTO storage.buckets (id, name, public) VALUES ('attachments', 'attachments', true);
-
--- Políticas pro storage (musí být spuštěno v Supabase dashboard)
--- CREATE POLICY "Allow public upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'attachments');
--- CREATE POLICY "Allow public read" ON storage.objects FOR SELECT USING (bucket_id = 'attachments');
--- CREATE POLICY "Allow public delete" ON storage.objects FOR DELETE USING (bucket_id = 'attachments');
+-- Dokončení SQL schema
+SELECT 'Database schema created successfully! All tables, indexes, and policies are ready.' as status;
