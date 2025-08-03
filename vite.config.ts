@@ -6,7 +6,23 @@ export default defineConfig({
   plugins: [react()],
   base: '/OnlineHlasovaniBoltNew/',
   build: {
-    outDir: 'dist'
+    outDir: 'dist',
+    rollupOptions: {
+      output: {
+        format: 'es',
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          router: ['react-router-dom']
+        }
+      }
+    },
+    assetsDir: 'assets',
+    target: 'es2015',
+    minify: 'terser',
+    sourcemap: false
   },
   server: {
     port: 3000,
