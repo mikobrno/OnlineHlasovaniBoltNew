@@ -5,7 +5,7 @@ import App from './App.tsx';
 import './index.css';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
-import { AppProvider } from './contexts/AppContext';
+import { AppProvider } from './contexts/AppContextSupabase';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

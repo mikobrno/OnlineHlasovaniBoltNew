@@ -1,0 +1,21 @@
+[build]
+  publish = "dist"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[functions]
+  external_node_modules = ["@supabase/supabase-js"]
+
+# Environment variables for Netlify (these will be set in Netlify dashboard)
+# VITE_SUPABASE_URL
+# VITE_SUPABASE_ANON_KEY
+# VITE_GEMINI_API_KEY
+# VITE_SMSBRANA_LOGIN
+# VITE_SMSBRANA_PASSWORD
