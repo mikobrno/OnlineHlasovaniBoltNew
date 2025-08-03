@@ -38,8 +38,12 @@ jobs:
         run: npm ci
         
       - name: Build application
-        run: npm run build
+        run: |
+          npm run build
+          cp public/.nojekyll dist/
+          cp public/404.html dist/
         env:
+          NODE_ENV: production
           # Environment variables pro build
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
@@ -47,6 +51,15 @@ jobs:
           VITE_GEMINI_API_KEY: ${{ secrets.VITE_GEMINI_API_KEY }}
           VITE_SMSBRANA_LOGIN: ${{ secrets.VITE_SMSBRANA_LOGIN }}
           VITE_SMSBRANA_PASSWORD: ${{ secrets.VITE_SMSBRANA_PASSWORD }}
+          
+      - name: List build output
+        run: |
+          echo "Contents of dist directory:"
+          ls -la dist/
+          echo "Contents of dist/assets directory:"
+          ls -la dist/assets/ | head -10
+          echo "index.html content check:"
+          head -20 dist/index.html
           
       - name: Setup Pages
         uses: actions/configure-pages@v4

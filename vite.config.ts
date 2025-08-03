@@ -2,15 +2,13 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command, mode }) => ({
   plugins: [react()],
-  base: command === 'build' ? '/OnlineHlasovaniBoltNew/' : '/',
-  optimizeDeps: {
-    exclude: ['lucide-react'],
-  },
+  base: mode === 'production' || command === 'build' ? '/OnlineHlasovaniBoltNew/' : '/',
   build: {
     outDir: 'dist',
     sourcemap: true,
+    assetsDir: 'assets',
     rollupOptions: {
       output: {
         manualChunks: {
@@ -19,9 +17,16 @@ export default defineConfig(({ command }) => ({
           supabase: ['@supabase/supabase-js'],
           pdf: ['jspdf', 'jspdf-autotable'],
           ai: ['@google/generative-ai']
-        }
+        },
+        // Přidáme hash do názvů souborů pro cache busting
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     }
+  },
+  optimizeDeps: {
+    exclude: ['lucide-react'],
   },
   server: {
     port: 3000,
