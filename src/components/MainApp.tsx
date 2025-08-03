@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { AppHeader } from './AppHeader';
 import { AppNavigation } from './AppNavigation';
 import { VotesListView } from './voting/VotesListView';
 import { MembersView } from './members/MembersView';
@@ -25,8 +24,7 @@ export const MainApp: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <AppHeader />
+    <div>
       <AppNavigation activeTab={activeTab} onTabChange={setActiveTab} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {renderActiveView()}
