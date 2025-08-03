@@ -31,7 +31,7 @@ export const AppHeader: React.FC = () => {
             >
               <Building2 className="w-8 h-8 text-blue-600" />
               <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                OnlineSprava
+                OnlineHlasování
               </h1>
             </button>
             {selectedBuilding && (

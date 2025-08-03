@@ -131,13 +131,13 @@ export const mockGlobalVariables: GlobalVariable[] = [
   {
     name: 'nazev_spolecnosti',
     description: 'Název správcovské společnosti',
-    value: 'OnlineSprava s.r.o.',
+    value: 'OnlineHlasování s.r.o.',
     isEditable: true
   },
   {
     name: 'kontaktni_email',
     description: 'Kontaktní e-mail společnosti',
-    value: 'podpora@onlinesprava.cz',
+    value: 'podpora@onlinehlasovani.cz',
     isEditable: true
   },
   {
@@ -155,13 +155,13 @@ export const mockGlobalVariables: GlobalVariable[] = [
   {
     name: 'web_spolecnosti',
     description: 'Webové stránky společnosti',
-    value: 'www.onlinesprava.cz',
+    value: 'www.onlinehlasovani.cz',
     isEditable: true
   },
   {
     name: 'podpis_spravce',
     description: 'Standardní podpis správce',
-    value: 'S pozdravem,\nTým OnlineSprava\n{{nazev_spolecnosti}}',
+    value: 'S pozdravem,\nTým OnlineHlasování\n{{nazev_spolecnosti}}',
     isEditable: true
   },
   {
@@ -385,7 +385,7 @@ export const mockObservers: Observer[] = [
   {
     id: '1',
     name: 'Ing. Pavel Správce',
-    email: 'spravce@onlinesprava.cz',
+    email: 'spravce@onlinehlasovani.cz',
     buildingId: '1',
     createdAt: '2024-01-01T10:00:00Z'
   }

@@ -52,7 +52,7 @@ export class EmailService {
           to: emailData.to,
           subject: emailData.subject,
           html: emailData.html,
-          from: emailData.from || 'noreply@onlinesprava.cz'
+          from: emailData.from || 'noreply@onlinehlasovani.cz'
         })
       };
 

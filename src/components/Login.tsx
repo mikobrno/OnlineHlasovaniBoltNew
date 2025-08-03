@@ -11,7 +11,7 @@ interface LoginProps {
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false }) => {
-  const [email, setEmail] = useState('admin@onlinesprava.cz');
+  const [email, setEmail] = useState('admin@onlinehlasovani.cz');
   const [password, setPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
   const { showToast } = useToast();
@@ -53,7 +53,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false }) => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@onlinesprava.cz"
+                placeholder="admin@onlinehlasovani.cz"
                 className="pl-10"
                 disabled={isLoading}
                 required
@@ -109,7 +109,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false }) => {
             Testovací účty:
           </h4>
           <div className="text-xs text-blue-800 dark:text-blue-200 space-y-1">
-            <p><strong>Admin:</strong> admin@onlinesprava.cz / admin123</p>
+            <p><strong>Admin:</strong> admin@onlinehlasovani.cz / admin123</p>
             <p><strong>Správce:</strong> spravce@budova1.cz / spravce123</p>
           </div>
         </div>

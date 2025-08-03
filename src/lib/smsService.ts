@@ -73,7 +73,7 @@ export class SMSService {
         password: this.config.password,
         recipient: formattedPhone,
         message: smsData.message,
-        sender_id: smsData.senderId || 'OnlineSprava'
+        sender_id: smsData.senderId || 'OnlineHlasování'
       });
 
       const response = await fetch(this.config.apiUrl, {
@@ -140,12 +140,12 @@ export class SMSService {
   }
 
   async sendVerificationCode(phoneNumber: string, code: string): Promise<SMSResponse> {
-    const message = `OnlineSprava - Váš ověřovací kód pro hlasování: ${code}. Kód je platný 10 minut.`;
+    const message = `OnlineHlasování - Váš ověřovací kód pro hlasování: ${code}. Kód je platný 10 minut.`;
     return this.sendSMS({ phoneNumber, message });
   }
 
   async sendVotingNotification(phoneNumber: string, voteName: string, link: string): Promise<SMSResponse> {
-    const message = `OnlineSprava - Nové hlasování: "${voteName}". Hlasujte na: ${link}`;
+    const message = `OnlineHlasování - Nové hlasování: "${voteName}". Hlasujte na: ${link}`;
     return this.sendSMS({ phoneNumber, message });
   }
 
