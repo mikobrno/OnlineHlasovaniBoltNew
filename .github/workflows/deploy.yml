@@ -42,6 +42,8 @@ jobs:
           npm run build
           cp public/.nojekyll dist/
           cp public/404.html dist/
+          cp public/.htaccess dist/ || true
+          cp public/web.config dist/ || true
         env:
           NODE_ENV: production
           # Environment variables pro build

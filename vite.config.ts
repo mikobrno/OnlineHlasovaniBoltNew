@@ -7,8 +7,10 @@ export default defineConfig(({ command, mode }) => ({
   base: mode === 'production' || command === 'build' ? '/OnlineHlasovaniBoltNew/' : '/',
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: false, // Vypneme sourcemap pro produkci
     assetsDir: 'assets',
+    target: ['es2015', 'edge88', 'firefox78', 'chrome87', 'safari12'],
+    minify: 'esbuild', // Změna na esbuild
     rollupOptions: {
       output: {
         manualChunks: {
@@ -18,10 +20,10 @@ export default defineConfig(({ command, mode }) => ({
           pdf: ['jspdf', 'jspdf-autotable'],
           ai: ['@google/generative-ai']
         },
-        // Přidáme hash do názvů souborů pro cache busting
-        entryFileNames: 'assets/[name]-[hash].js',
-        chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
+        // Jednodušší názvy souborů
+        entryFileNames: 'assets/index.js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name].[ext]'
       }
     }
   },
