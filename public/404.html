@@ -3,10 +3,17 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>OnlineSpráva</title>
+    <title>Online Hlasování</title>
     <script type="text/javascript">
-      // Simple redirect to base URL
-      window.location.href = '/OnlineHlasovaniBoltNew/';
+      // SPA fallback pro GitHub Pages (viz https://github.com/rafgraph/spa-github-pages)
+      var l = window.location;
+      var base = '/OnlineHlasovaniBoltNew';
+      var path = l.pathname.replace(base, '');
+      if (path && path !== '/') {
+        l.replace(base + '/?redirect=' + encodeURIComponent(path + l.search + l.hash));
+      } else {
+        l.replace(base + '/');
+      }
     </script>
   </head>
   <body>
