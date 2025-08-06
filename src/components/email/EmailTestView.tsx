@@ -153,7 +153,7 @@ export const EmailTestView: React.FC = () => {
         </h2>
         <div className="space-y-2">
           <p className="text-sm text-blue-800 dark:text-blue-200">
-            <strong>Webhook URL:</strong> Není nakonfigurována
+            <strong>Webhook URL:</strong> {import.meta.env.VITE_N8N_EMAIL_WEBHOOK_URL || 'https://n8n.srv882016.hstgr.cloud/webhook/ada15a58-b14f-4179-92a1-780b009669a4'}
           </p>
           <p className="text-xs text-blue-600 dark:text-blue-300">
             Emailová integrace je připravena pro spojení s N8N workflow systémem pro odesílání notifikací vlastníkům jednotek.
