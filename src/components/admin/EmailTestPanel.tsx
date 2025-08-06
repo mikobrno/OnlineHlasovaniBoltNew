@@ -28,13 +28,17 @@ export const EmailTestPanel: React.FC = () => {
   const testWebhookConnection = async () => {
     setIsLoading(true);
     try {
+      console.log('Starting webhook test...');
       const success = await emailService.testEmailWebhook();
       addTestResult(
         'Webhook Test',
         success,
-        success ? 'N8N webhook je funkční' : 'N8N webhook nefunguje - zkontrolujte konfiguraci'
+        success 
+          ? 'N8N webhook je dostupný (CORS může blokovat přímé volání z browseru, ale webhook funguje)' 
+          : 'N8N webhook není dostupný - zkontrolujte URL a konfiguraci'
       );
     } catch (error) {
+      console.error('Webhook test error:', error);
       addTestResult('Webhook Test', false, `Chyba: ${error instanceof Error ? error.message : 'Neznámá chyba'}`);
     } finally {
       setIsLoading(false);
@@ -113,10 +117,14 @@ export const EmailTestPanel: React.FC = () => {
         <p className="text-sm text-blue-700 dark:text-blue-200 mb-2">
           <strong>Webhook URL:</strong> {import.meta.env.VITE_N8N_EMAIL_WEBHOOK_URL || 'Není nakonfigurováno'}
         </p>
-        <p className="text-sm text-blue-600 dark:text-blue-300">
-          Emails jsou odesílány přes N8N webhook na vaši instanci. 
-          Ujistěte se, že máte správně nakonfigurovaný workflow v N8N.
-        </p>
+        <div className="text-sm text-blue-600 dark:text-blue-300 space-y-1">
+          <p>
+            Emails jsou odesílány přes N8N webhook na vaši instanci. 
+          </p>
+          <p className="text-xs">
+            <strong>Poznámka:</strong> CORS může blokovat přímé testování z browseru, ale webhook může stále fungovat pro skutečné emaily.
+          </p>
+        </div>
       </div>
 
       {/* Test Controls */}
