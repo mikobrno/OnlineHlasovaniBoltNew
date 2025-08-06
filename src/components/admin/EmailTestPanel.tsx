@@ -1,0 +1,236 @@
+import React, { useState } from 'react';
+import { Send, Mail, TestTube, CheckCircle, XCircle } from 'lucide-react';
+import * as emailService from '../../lib/emailService';
+import { NotificationService } from '../../lib/notificationService';
+
+interface TestResult {
+  type: string;
+  success: boolean;
+  message: string;
+  timestamp: string;
+}
+
+export const EmailTestPanel: React.FC = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
+  const [testEmail, setTestEmail] = useState('test@example.com');
+
+  const addTestResult = (type: string, success: boolean, message: string) => {
+    const result: TestResult = {
+      type,
+      success,
+      message,
+      timestamp: new Date().toLocaleString('cs-CZ')
+    };
+    setTestResults(prev => [result, ...prev]);
+  };
+
+  const testWebhookConnection = async () => {
+    setIsLoading(true);
+    try {
+      const success = await emailService.testEmailWebhook();
+      addTestResult(
+        'Webhook Test',
+        success,
+        success ? 'N8N webhook je funkční' : 'N8N webhook nefunguje - zkontrolujte konfiguraci'
+      );
+    } catch (error) {
+      addTestResult('Webhook Test', false, `Chyba: ${error instanceof Error ? error.message : 'Neznámá chyba'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testCustomEmail = async () => {
+    if (!testEmail) {
+      addTestResult('Custom Email', false, 'Zadejte email adresu');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const testOwner = {
+        id: 'test-1',
+        name: 'Test Uživatel',
+        email: testEmail,
+        voting_token: 'test-token-123'
+      };
+
+      const testVoting = {
+        id: 'test-voting-1',
+        title: 'Test hlasování emailu',
+        description: 'Toto je testovací hlasování pro ověření email funkčnosti.',
+        start_date: new Date().toISOString(),
+        end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      };
+
+      const result = await NotificationService.sendVotingNotifications([testOwner], testVoting, 'start');
+      
+      addTestResult(
+        'Custom Email',
+        result.success > 0,
+        result.success > 0 
+          ? `Email úspěšně odeslán na ${testEmail}` 
+          : `Nepodařilo se odeslat email na ${testEmail}`
+      );
+    } catch (error) {
+      addTestResult('Custom Email', false, `Chyba: ${error instanceof Error ? error.message : 'Neznámá chyba'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const testFullNotificationSystem = async () => {
+    setIsLoading(true);
+    try {
+      const success = await NotificationService.testNotificationSystem();
+      addTestResult(
+        'Full System Test',
+        success,
+        success ? 'Celý notifikační systém funguje správně' : 'Notifikační systém má problémy'
+      );
+    } catch (error) {
+      addTestResult('Full System Test', false, `Chyba: ${error instanceof Error ? error.message : 'Neznámá chyba'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearResults = () => {
+    setTestResults([]);
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <div className="flex items-center gap-2 mb-6">
+        <Mail className="w-6 h-6 text-blue-600" />
+        <h2 className="text-xl font-semibold text-gray-900">Email Systém - Test Panel</h2>
+      </div>
+
+      {/* N8N Webhook Info */}
+      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h3 className="font-medium text-blue-900 mb-2">N8N Webhook Konfigurace</h3>
+        <p className="text-sm text-blue-700 mb-2">
+          <strong>Webhook URL:</strong> {import.meta.env.VITE_N8N_EMAIL_WEBHOOK_URL || 'Není nakonfigurováno'}
+        </p>
+        <p className="text-sm text-blue-600">
+          Emails jsou odesílány přes N8N webhook na vaši instanci. 
+          Ujistěte se, že máte správně nakonfigurovaný workflow v N8N.
+        </p>
+      </div>
+
+      {/* Test Controls */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="space-y-4">
+          <button
+            onClick={testWebhookConnection}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <TestTube className="w-4 h-4" />
+            Test Webhook Připojení
+          </button>
+
+          <button
+            onClick={testFullNotificationSystem}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <CheckCircle className="w-4 h-4" />
+            Test Celého Systému
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Test Email Adresa
+            </label>
+            <input
+              type="email"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              placeholder="test@example.com"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          <button
+            onClick={testCustomEmail}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Send className="w-4 h-4" />
+            Odeslat Test Email
+          </button>
+        </div>
+      </div>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <span className="ml-2 text-gray-600">Testování...</span>
+        </div>
+      )}
+
+      {/* Results */}
+      {testResults.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium text-gray-900">Výsledky Testů</h3>
+            <button
+              onClick={clearResults}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              Vymazat
+            </button>
+          </div>
+
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {testResults.map((result, index) => (
+              <div
+                key={index}
+                className={`p-3 rounded-lg border ${
+                  result.success 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-red-50 border-red-200'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  {result.success ? (
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-600" />
+                  )}
+                  <span className="font-medium text-sm">
+                    {result.type}
+                  </span>
+                  <span className="text-xs text-gray-500 ml-auto">
+                    {result.timestamp}
+                  </span>
+                </div>
+                <p className={`text-sm ${
+                  result.success ? 'text-green-700' : 'text-red-700'
+                }`}>
+                  {result.message}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Usage Instructions */}
+      <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+        <h3 className="font-medium text-gray-900 mb-2">Jak používat</h3>
+        <ul className="text-sm text-gray-600 space-y-1">
+          <li>• <strong>Test Webhook:</strong> Ověří připojení k N8N webhook</li>
+          <li>• <strong>Test Celého Systému:</strong> Otestuje kompletní notifikační systém</li>
+          <li>• <strong>Test Email:</strong> Odešle skutečný email na zadanou adresu</li>
+          <li>• Zkontrolujte konzoli prohlížeče pro podrobné logy</li>
+        </ul>
+      </div>
+    </div>
+  );
+};

@@ -66,3 +66,12 @@ export class SMSService {
 }
 
 export const smsService = new SMSService();
+
+// Export funkce pro snadnější použití
+export const sendSMS = async (phoneNumber: string, message: string): Promise<SMSResponse> => {
+  return smsService.sendSMS(phoneNumber, message);
+};
+
+export const sendVerificationCode = async (phoneNumber: string, code: string): Promise<SMSResponse> => {
+  return smsService.sendVerificationCode(phoneNumber, code);
+};
