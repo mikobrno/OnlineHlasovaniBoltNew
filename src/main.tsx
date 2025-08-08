@@ -7,6 +7,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
+import { SupabaseAppProvider } from './contexts/SupabaseAppContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -15,7 +16,9 @@ createRoot(document.getElementById('root')!).render(
         <ToastProvider>
           <AuthProvider>
             <AppProvider>
-              <App />
+              <SupabaseAppProvider>
+                <App />
+              </SupabaseAppProvider>
             </AppProvider>
           </AuthProvider>
         </ToastProvider>
