@@ -28,31 +28,25 @@ export class SMSService {
     }
 
     try {
-      const params = new URLSearchParams({
-        action: 'send_sms',
-        username: this.config.login,
-        password: this.config.password,
-        recipient: phoneNumber.replace(/\s+/g, '').replace(/^\+/, ''),
-        message: message,
-        sender_id: 'OnlineSprava'
-      });
+      // Použijeme Netlify function místo přímého volání API
+      const apiUrl = import.meta.env.DEV 
+        ? 'http://localhost:8888/.netlify/functions/sms'
+        : '/.netlify/functions/sms';
 
-      const response = await fetch(this.config.apiUrl, {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
         },
-        body: params
+        body: JSON.stringify({
+          action: 'send_sms',
+          phoneNumber,
+          message
+        })
       });
 
-      const result = await response.text();
-      
-      if (result.includes('OK')) {
-        const smsId = result.split(' ')[1];
-        return { success: true, message: 'SMS byla odeslána', smsId };
-      } else {
-        return { success: false, message: `Chyba při odesílání SMS: ${result}` };
-      }
+      const result = await response.json();
+      return result;
     } catch (error) {
       console.error('SMS sending error:', error);
       return { success: false, message: 'Chyba při odesílání SMS' };
