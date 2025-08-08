@@ -5,13 +5,14 @@
 [build.environment]
   NODE_VERSION = "18"
 
+[functions]
+  directory = "netlify/functions"
+  external_node_modules = ["@supabase/supabase-js", "node-fetch"]
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[functions]
-  external_node_modules = ["@supabase/supabase-js"]
 
 # Environment variables for Netlify (these will be set in Netlify dashboard)
 # VITE_SUPABASE_URL

@@ -1,5 +1,7 @@
 // netlify/functions/sms.js - Netlify Function pro SMS API
-export async function handler(event, context) {
+const fetch = require('node-fetch');
+
+exports.handler = async (event, context) => {
   // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -107,4 +109,4 @@ export async function handler(event, context) {
       })
     };
   }
-}
+};
