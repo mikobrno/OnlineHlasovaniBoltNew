@@ -5,13 +5,12 @@ interface EmailData {
   from?: string;
 }
 
-interface WebhookPayload {
-  to: string;
-  subject: string;
-  html: string;
-  from: string;
-  timestamp: string;
-  source: string;
+interface GmailConfig {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  refreshToken: string;
+  accessToken?: string;
 }
 
 interface VotingData {
@@ -27,46 +26,123 @@ interface OwnerData {
   voting_token: string;
 }
 
-export const sendEmailViaWebhook = async (emailData: EmailData): Promise<boolean> => {
-  const webhookUrl = (import.meta as { env: Record<string, string> }).env.VITE_N8N_EMAIL_WEBHOOK_URL;
+interface GmailResponse {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+// Gmail API configuration
+const getGmailConfig = (): GmailConfig => ({
+  clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+  clientSecret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
+  redirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI || 'http://localhost:3000',
+  refreshToken: import.meta.env.VITE_GOOGLE_REFRESH_TOKEN || '',
+});
+
+// Function to refresh Google access token
+const refreshAccessToken = async (): Promise<string | null> => {
+  const config = getGmailConfig();
   
-  if (!webhookUrl) {
-    console.error('N8N webhook URL not configured');
-    return false;
+  if (!config.clientId || !config.clientSecret || !config.refreshToken) {
+    console.error('Google OAuth credentials not configured');
+    return null;
   }
 
   try {
-    const payload: WebhookPayload = {
-      to: emailData.to,
-      subject: emailData.subject,
-      html: emailData.html,
-      from: emailData.from || 'noreply@onlinehlasovani.cz',
-      timestamp: new Date().toISOString(),
-      source: 'OnlineHlasování',
-    };
-
-    console.log('Sending email via N8N webhook:', { to: payload.to, subject: payload.subject });
-
-    const response = await fetch(webhookUrl, {
+    const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify(payload),
+      body: new URLSearchParams({
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        refresh_token: config.refreshToken,
+        grant_type: 'refresh_token',
+      }),
     });
 
-    if (!response.ok) {
-      console.error('N8N webhook request failed:', response.status, response.statusText);
-      return false;
+    const data = await response.json();
+    
+    if (data.access_token) {
+      console.log('Access token refreshed successfully');
+      return data.access_token;
+    } else {
+      console.error('Failed to refresh access token:', data);
+      return null;
+    }
+  } catch (error) {
+    console.error('Error refreshing access token:', error);
+    return null;
+  }
+};
+
+// Function to create email message in RFC 2822 format
+const createEmailMessage = (emailData: EmailData): string => {
+  const from = emailData.from || 'noreply@onlinehlasovani.cz';
+  const boundary = '----boundary_' + Date.now();
+  
+  const message = [
+    `From: ${from}`,
+    `To: ${emailData.to}`,
+    `Subject: ${emailData.subject}`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: quoted-printable',
+    '',
+    emailData.html,
+    '',
+    `--${boundary}--`
+  ].join('\r\n');
+
+  // Encode message in base64url format
+  return btoa(message)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+};
+
+// Main function to send email via Gmail API
+export const sendEmailViaGmail = async (emailData: EmailData): Promise<GmailResponse> => {
+  try {
+    const accessToken = await refreshAccessToken();
+    
+    if (!accessToken) {
+      return { success: false, error: 'Failed to get access token' };
     }
 
-    const result = await response.text();
-    console.log('N8N webhook response:', result);
-    return true;
+    const emailMessage = createEmailMessage(emailData);
+    
+    console.log('Sending email via Gmail API:', { to: emailData.to, subject: emailData.subject });
+
+    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        raw: emailMessage
+      }),
+    });
+
+    const result = await response.json();
+    
+    if (response.ok && result.id) {
+      console.log('Email sent successfully via Gmail API:', result.id);
+      return { success: true, messageId: result.id };
+    } else {
+      console.error('Gmail API error:', result);
+      return { success: false, error: result.error?.message || 'Gmail API error' };
+    }
 
   } catch (error) {
-    console.error('Error sending email via N8N webhook:', error);
-    return false;
+    console.error('Error sending email via Gmail API:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 };
 
@@ -275,75 +351,80 @@ export const getEmailTemplate = (type: 'start' | 'reminder' | 'end', voting: Vot
 
 // Funkce pro odesílání různých typů emailů
 export const sendVotingStartEmail = async (owner: OwnerData, voting: VotingData): Promise<boolean> => {
-  return await sendEmailViaWebhook({
+  const result = await sendEmailViaGmail({
     to: owner.email,
     subject: getEmailSubject('start', voting),
     html: getEmailTemplate('start', voting, owner),
   });
+  return result.success;
 };
 
 export const sendVotingReminderEmail = async (owner: OwnerData, voting: VotingData): Promise<boolean> => {
-  return await sendEmailViaWebhook({
+  const result = await sendEmailViaGmail({
     to: owner.email,
     subject: getEmailSubject('reminder', voting),
     html: getEmailTemplate('reminder', voting, owner),
   });
+  return result.success;
 };
 
 export const sendVotingEndEmail = async (owner: OwnerData, voting: VotingData): Promise<boolean> => {
-  return await sendEmailViaWebhook({
+  const result = await sendEmailViaGmail({
     to: owner.email,
     subject: getEmailSubject('end', voting),
     html: getEmailTemplate('end', voting, owner),
   });
+  return result.success;
 };
 
-// Test funkce pro ověření webhook spojení
-export const testEmailWebhook = async (): Promise<boolean> => {
-  const webhookUrl = (import.meta as { env: Record<string, string> }).env.VITE_N8N_EMAIL_WEBHOOK_URL;
-  
-  if (!webhookUrl) {
-    console.error('N8N webhook URL not configured');
-    return false;
-  }
-
+// Test funkce pro ověření Gmail API spojení
+export const testEmailGmail = async (): Promise<{ success: boolean; message: string }> => {
   try {
-    // Pouze testujeme, zda webhook URL odpovídá - neposíláme skutečný email
-    console.log('Testing N8N webhook connection:', webhookUrl);
+    const config = getGmailConfig();
     
-    // Jednoduchý test připojení s minimálními daty
-    const testPayload = {
-      test: true,
-      timestamp: new Date().toISOString(),
-      source: 'OnlineHlasování-ConnectionTest'
-    };
+    if (!config.clientId || !config.clientSecret || !config.refreshToken) {
+      return { 
+        success: false, 
+        message: 'Google OAuth credentials not configured. Check environment variables.' 
+      };
+    }
 
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
+    // Test access token refresh
+    const accessToken = await refreshAccessToken();
+    
+    if (!accessToken) {
+      return { 
+        success: false, 
+        message: 'Failed to refresh access token. Check Google OAuth configuration.' 
+      };
+    }
+
+    // Test Gmail API connection by checking profile
+    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
       headers: {
-        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
       },
-      body: JSON.stringify(testPayload),
     });
 
-    console.log('N8N webhook test response status:', response.status);
-    
-    // Přijímáme jakoukoliv odpověď (i 404, 400) jako důkaz, že server odpovídá
-    // CORS chyby se projeví dříve než dostaneme response
-    return true;
+    if (response.ok) {
+      const profile = await response.json();
+      return { 
+        success: true, 
+        message: `Gmail API connected successfully. Email: ${profile.emailAddress}` 
+      };
+    } else {
+      const error = await response.json();
+      return { 
+        success: false, 
+        message: `Gmail API error: ${error.error?.message || 'Unknown error'}` 
+      };
+    }
 
   } catch (error) {
-    console.error('N8N webhook test failed:', error);
-    
-    // Pokud je chyba způsobena CORS, webhook pravděpodobně funguje
-    if (error instanceof Error) {
-      const errorMessage = error.message.toLowerCase();
-      if (errorMessage.includes('cors') || errorMessage.includes('network') || errorMessage.includes('fetch')) {
-        console.log('CORS error detected - webhook is probably accessible but blocks browser requests');
-        return true; // Webhook je dostupný, jen blokuje CORS z browseru
-      }
-    }
-    
-    return false;
+    console.error('Gmail API test failed:', error);
+    return { 
+      success: false, 
+      message: `Connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    };
   }
 };

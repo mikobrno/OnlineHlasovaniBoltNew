@@ -25,21 +25,19 @@ export const EmailTestPanel: React.FC = () => {
     setTestResults(prev => [result, ...prev]);
   };
 
-  const testWebhookConnection = async () => {
+  const testGmailConnection = async () => {
     setIsLoading(true);
     try {
-      console.log('Starting webhook test...');
-      const success = await emailService.testEmailWebhook();
+      console.log('Starting Gmail API test...');
+      const result = await emailService.testEmailGmail();
       addTestResult(
-        'Webhook Test',
-        success,
-        success 
-          ? 'N8N webhook je dostupný (CORS může blokovat přímé volání z browseru, ale webhook funguje)' 
-          : 'N8N webhook není dostupný - zkontrolujte URL a konfiguraci'
+        'Gmail API Test',
+        result.success,
+        result.message
       );
     } catch (error) {
-      console.error('Webhook test error:', error);
-      addTestResult('Webhook Test', false, `Chyba: ${error instanceof Error ? error.message : 'Neznámá chyba'}`);
+      console.error('Gmail API test error:', error);
+      addTestResult('Gmail API Test', false, `Chyba: ${error instanceof Error ? error.message : 'Neznámá chyba'}`);
     } finally {
       setIsLoading(false);
     }
@@ -111,18 +109,21 @@ export const EmailTestPanel: React.FC = () => {
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Email Systém - Test Panel</h2>
       </div>
 
-      {/* N8N Webhook Info */}
+      {/* Gmail API Info */}
       <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-        <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-2">N8N Webhook Konfigurace</h3>
+        <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-2">📧 Gmail API Konfigurace</h3>
         <p className="text-sm text-blue-700 dark:text-blue-200 mb-2">
-          <strong>Webhook URL:</strong> {import.meta.env.VITE_N8N_EMAIL_WEBHOOK_URL || 'Není nakonfigurováno'}
+          <strong>Client ID:</strong> {import.meta.env.VITE_GOOGLE_CLIENT_ID ? '✓ Nakonfigurováno' : '❌ Není nakonfigurováno'}
+        </p>
+        <p className="text-sm text-blue-700 dark:text-blue-200 mb-2">
+          <strong>Refresh Token:</strong> {import.meta.env.VITE_GOOGLE_REFRESH_TOKEN ? '✓ Nakonfigurováno' : '❌ Není nakonfigurováno'}
         </p>
         <div className="text-sm text-blue-600 dark:text-blue-300 space-y-1">
           <p>
-            Emails jsou odesílány přes N8N webhook na vaši instanci. 
+            Emails jsou odesílány přes Google Gmail API s OAuth2 autentizací. 
           </p>
           <p className="text-xs">
-            <strong>Poznámka:</strong> CORS může blokovat přímé testování z browseru, ale webhook může stále fungovat pro skutečné emaily.
+            <strong>Nastavení:</strong> Nakonfigurujte Google OAuth credentials v .env souboru pro plnou funkčnost.
           </p>
         </div>
       </div>
@@ -131,12 +132,12 @@ export const EmailTestPanel: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="space-y-4">
           <button
-            onClick={testWebhookConnection}
+            onClick={testGmailConnection}
             disabled={isLoading}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <TestTube className="w-4 h-4" />
-            Test Webhook Připojení
+            Test Gmail API
           </button>
 
           <button
