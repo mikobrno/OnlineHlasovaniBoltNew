@@ -7,7 +7,30 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
-import { SupabaseAppProvider } from './contexts/SupabaseAppContext';
+
+// Podmíněné načítání Supabase provideru
+const USE_SUPABASE = true; // AKTIVNÍ Supabase připojení
+
+const AppWithProviders = () => {
+  if (USE_SUPABASE) {
+    // Dynamický import pro Supabase
+    const { SupabaseAppProvider } = require('./contexts/SupabaseAppContext');
+    return (
+      <AppProvider>
+        <SupabaseAppProvider>
+          <App />
+        </SupabaseAppProvider>
+      </AppProvider>
+    );
+  }
+  
+  // Pouze mock data
+  return (
+    <AppProvider>
+      <App />
+    </AppProvider>
+  );
+};
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -15,11 +38,7 @@ createRoot(document.getElementById('root')!).render(
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            <AppProvider>
-              <SupabaseAppProvider>
-                <App />
-              </SupabaseAppProvider>
-            </AppProvider>
+            <AppWithProviders />
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>
