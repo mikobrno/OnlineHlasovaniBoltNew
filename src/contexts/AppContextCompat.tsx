@@ -5,7 +5,7 @@ import { useApp as useMockApp } from './AppContext';
 import { useSupabaseApp } from '../hooks/useSupabaseApp';
 
 // Přepínač pro volbu mezi mock daty a Supabase
-const USE_SUPABASE = false; // Dočasně vypnuto kvůli chybám na produkci
+const USE_SUPABASE = true; // Aktivováno po opravě RLS políček
 
 export function useApp() {
   if (USE_SUPABASE) {
