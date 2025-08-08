@@ -63,6 +63,70 @@ export class SMSService {
     const message = `OnlineSprava - Váš ověřovací kód pro hlasování: ${code}. Kód je platný 10 minut.`;
     return this.sendSMS(phoneNumber, message);
   }
+
+  async testConnection(): Promise<boolean> {
+    if (!this.config.login || !this.config.password) {
+      return false;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        action: 'check_credit',
+        username: this.config.login,
+        password: this.config.password
+      });
+
+      const response = await fetch(this.config.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params
+      });
+
+      const result = await response.text();
+      return !result.includes('ERROR');
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async getCredit(): Promise<{ success: boolean; message: string; credit?: number }> {
+    if (!this.config.login || !this.config.password) {
+      return { success: false, message: 'SMS služba není nakonfigurována' };
+    }
+
+    try {
+      const params = new URLSearchParams({
+        action: 'check_credit',
+        username: this.config.login,
+        password: this.config.password
+      });
+
+      const response = await fetch(this.config.apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params
+      });
+
+      const result = await response.text();
+      
+      if (result.includes('ERROR')) {
+        return { success: false, message: `Chyba: ${result}` };
+      } else {
+        const credit = parseFloat(result.replace('CREDIT ', ''));
+        return { 
+          success: true, 
+          message: `Dostupný kredit: ${credit} Kč`,
+          credit: credit
+        };
+      }
+    } catch (error) {
+      return { success: false, message: 'Chyba při zjišťování kreditu' };
+    }
+  }
 }
 
 export const smsService = new SMSService();
