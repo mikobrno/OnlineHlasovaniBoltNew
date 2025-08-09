@@ -2,28 +2,16 @@
   command = "npm run build"
   publish = "dist"
 
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
-[build]
-  publish = "dist"
-  command = "npm run build"
-
 [build.environment]
   NODE_VERSION = "18"
 
 [functions]
   directory = "netlify/functions"
-  external_node_modules = ["@supabase/supabase-js", "node-fetch"]
+  node_bundler = "esbuild"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-# Environment variables for Netlify (these will be set in Netlify dashboard)
-# VITE_SUPABASE_URL
-# VITE_SUPABASE_ANON_KEY
-# VITE_GEMINI_API_KEY
-# VITE_SMSBRANA_LOGIN
-# VITE_SMSBRANA_PASSWORD
+# Environment variables are configured in Netlify dashboard
