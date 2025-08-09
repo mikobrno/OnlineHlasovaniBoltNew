@@ -1,4 +1,4 @@
-import { useAuth } from './contexts/AuthContext';
+import { useAuth } from './contexts/SupabaseAuthContext';
 import { Login } from './components/Login';
 import { AppContent } from './components/AppContent.tsx';
 import { useToast } from './contexts/ToastContext';
@@ -10,11 +10,11 @@ function App() {
   console.log('App render - isAuthenticated:', isAuthenticated, 'isLoading:', authLoading, 'user:', user);
 
   const handleLogin = async (credentials: { email: string; password: string }) => {
-    const success = await login(credentials.email, credentials.password);
-    if (success) {
+    const result = await login(credentials.email, credentials.password);
+    if (result.success) {
       showToast('Přihlášení proběhlo úspěšně', 'success');
     } else {
-      showToast('Neplatné přihlašovací údaje', 'error');
+      showToast(result.error || 'Neplatné přihlašovací údaje', 'error');
     }
   };
 

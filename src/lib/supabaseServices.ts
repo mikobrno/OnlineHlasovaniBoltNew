@@ -9,6 +9,12 @@ import {
   Observer 
 } from '../data/mockData';
 
+// Helper function to handle Supabase errors with more context
+const handleSupabaseError = (error: any, operation: string) => {
+  // Wrap error with context for UI toast; avoid noisy console logs
+  throw new Error(`${operation} failed: ${error?.message || error?.details || 'Unknown error'}`);
+};
+
 // Building Services
 export const buildingService = {
   async getAll(): Promise<Building[]> {
@@ -16,9 +22,11 @@ export const buildingService = {
       .from('buildings')
       .select('*');
     
-    if (error) throw error;
+    if (error) {
+      handleSupabaseError(error, 'fetching buildings');
+    }
     
-    return data.map(row => ({
+    return (data || []).map(row => ({
       id: row.id,
       name: row.name,
       address: row.address,
@@ -39,7 +47,9 @@ export const buildingService = {
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      handleSupabaseError(error, 'creating building');
+    }
     
     return {
       id: data.id,

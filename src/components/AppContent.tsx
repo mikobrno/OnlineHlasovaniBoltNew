@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { useApp } from '../contexts/AppContext';
+import { useApp } from '../contexts/AppContextCompat';
 import { AppHeader } from './AppHeader';
 import { BuildingSelector } from './BuildingSelector';
 import { MainApp } from './MainApp';

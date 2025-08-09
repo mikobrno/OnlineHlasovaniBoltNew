@@ -17,6 +17,8 @@ import {
   buildingVariableService,
   observerService
 } from '../lib/supabaseServices';
+import { initializeAuth } from '../lib/supabaseClient';
+import { useAuth } from './SupabaseAuthContext';
 import { useToast } from './ToastContext';
 
 interface AppState {
@@ -291,6 +293,7 @@ const AppContext = createContext<AppContextValue | undefined>(undefined);
 export const SupabaseAppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const { showToast } = useToast();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const handleError = (error: Error | unknown, action: string) => {
     console.error(`Error ${action}:`, error);
@@ -713,6 +716,11 @@ export const SupabaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
   // Load initial data
   useEffect(() => {
     const loadInitialData = async () => {
+      // počkej na auth a teprve pak načti data
+      if (authLoading) return;
+      if (!isAuthenticated) return;
+
+      await initializeAuth();
       await Promise.all([
         loadBuildings(),
         loadTemplates(),
@@ -723,7 +731,7 @@ export const SupabaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     loadInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Záměrně prázdné dependency array - chceme načíst data pouze jednou
+  }, [isAuthenticated, authLoading]);
 
   const value: AppContextValue = {
     ...state,

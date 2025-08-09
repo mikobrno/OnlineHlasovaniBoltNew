@@ -7,7 +7,28 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Standardní konfigurace Supabase klienta – token z auth se po přihlášení přidá automaticky
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  },
+  db: {
+    schema: 'public'
+  }
+});
+
+// Debug logs removed to avoid leaking keys in console
+
+// No eager auth logs; auth state is handled by SupabaseAuthContext
+
+
+// Initialize anonymous authentication immediately
+// Initialization placeholder (kept for compatibility, intentionally empty)
+export const initializeAuth = async () => {
+  return;
+};
 
 // Type definitions for Supabase tables
 export interface Database {
@@ -140,7 +161,7 @@ export interface Database {
           body: string;
           building_id: string | null;
           is_global: boolean;
-          custom_variables: any | null;
+          custom_variables: unknown | null;
         };
         Insert: {
           id?: string;
@@ -149,7 +170,7 @@ export interface Database {
           body: string;
           building_id?: string | null;
           is_global: boolean;
-          custom_variables?: any | null;
+          custom_variables?: unknown | null;
         };
         Update: {
           id?: string;
@@ -158,7 +179,7 @@ export interface Database {
           body?: string;
           building_id?: string | null;
           is_global?: boolean;
-          custom_variables?: any | null;
+          custom_variables?: unknown | null;
         };
       };
       global_variables: {

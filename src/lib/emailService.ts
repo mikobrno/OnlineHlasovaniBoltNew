@@ -106,9 +106,33 @@ const createEmailMessage = (emailData: EmailData): string => {
     .replace(/=+$/, '');
 };
 
-// Main function to send email via Gmail API
+// Helper to send via Netlify Function (SMTP) when OAuth config chybí
+const sendViaBackendSMTP = async (emailData: EmailData): Promise<GmailResponse> => {
+  try {
+  const base = import.meta.env.VITE_FUNCTIONS_BASE_URL || '';
+  const url = base ? `${base}/.netlify/functions/send-email` : '/.netlify/functions/send-email';
+  const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(emailData),
+    });
+    const data = await res.json();
+    if (res.ok && data.success) return { success: true, messageId: data.messageId };
+    return { success: false, error: data.error || 'Backend SMTP error' };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'Network error' };
+  }
+};
+
+// Main function to send email via Gmail API (or SMTP fallback)
 export const sendEmailViaGmail = async (emailData: EmailData): Promise<GmailResponse> => {
   try {
+    const cfg = getGmailConfig();
+    // Fallback: pokud není nakonfigurován OAuth, použij SMTP backend
+    if (!cfg.clientId || !cfg.clientSecret || !cfg.refreshToken) {
+      return await sendViaBackendSMTP(emailData);
+    }
+
     const accessToken = await refreshAccessToken();
     
     if (!accessToken) {
@@ -130,7 +154,7 @@ export const sendEmailViaGmail = async (emailData: EmailData): Promise<GmailResp
       }),
     });
 
-    const result = await response.json();
+  const result = await response.json();
     
     if (response.ok && result.id) {
       console.log('Email sent successfully via Gmail API:', result.id);
@@ -141,8 +165,9 @@ export const sendEmailViaGmail = async (emailData: EmailData): Promise<GmailResp
     }
 
   } catch (error) {
-    console.error('Error sending email via Gmail API:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  console.error('Error sending email via Gmail API:', error);
+  // poslední fallback na SMTP backend (např. když je dočasný výpadek Google)
+  return await sendViaBackendSMTP(emailData);
   }
 };
 
@@ -383,10 +408,16 @@ export const testEmailGmail = async (): Promise<{ success: boolean; message: str
     const config = getGmailConfig();
     
     if (!config.clientId || !config.clientSecret || !config.refreshToken) {
-      return { 
-        success: false, 
-        message: 'Google OAuth credentials not configured. Check environment variables.' 
-      };
+      // otestuj dostupnost backendové SMTP funkce jako alternativu
+      try {
+        const base = import.meta.env.VITE_FUNCTIONS_BASE_URL || '';
+        const url = base ? `${base}/.netlify/functions/send-email` : '/.netlify/functions/send-email';
+        const ping = await fetch(url, { method: 'GET' });
+        if (ping.ok) {
+          return { success: true, message: 'Gmail OAuth není nastaven. SMTP backend je připraven.' };
+        }
+      } catch {}
+      return { success: false, message: 'Google OAuth credentials not configured. Check environment variables.' };
     }
 
     // Test access token refresh

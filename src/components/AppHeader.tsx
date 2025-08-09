@@ -1,8 +1,8 @@
 import React from 'react';
 import { Building2, Sun, Moon, LogOut, User } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
-import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/SupabaseAuthContext';
+import { useApp } from '../contexts/AppContextCompat';
 import { Button } from './common/Button';
 
 export const AppHeader: React.FC = () => {
