@@ -54,6 +54,7 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
 
       const customVariables = {
         odkaz_na_hlasovani: votingLink,
+        odkaz_s_hlasovanim: votingLink, // alias podporovaný v replaceVariables
         overovaci_kod: votingToken.verificationCode
       };
 
@@ -183,6 +184,7 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
           </select>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             V šabloně můžete použít proměnnou: <code>{'{{odkaz_na_hlasovani}}'}</code>
+            {' '}nebo alias <code>{'{{odkaz_s_hlasovanim}}'}</code>
           </p>
         </div>
 

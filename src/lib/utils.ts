@@ -1,4 +1,4 @@
-import { Building, Member, Vote, GlobalVariable, availableVariables } from '../data/mockData';
+import { Building, Member, Vote, GlobalVariable } from '../data/mockData';
 
 export const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
@@ -90,6 +90,20 @@ export const replaceVariables = (
       const regex = new RegExp(`{{${key}}}`, 'g');
       result = result.replace(regex, value);
     });
+
+    // Kompatibilita: podporuj i {{odkaz_s_hlasovanim}} jako alias k {{odkaz_na_hlasovani}}
+    if (customVariables['odkaz_na_hlasovani'] || customVariables['odkaz_s_hlasovanim']) {
+      const votingLink = customVariables['odkaz_na_hlasovani'] || customVariables['odkaz_s_hlasovanim'];
+      result = result.replace(/{{odkaz_s_hlasovanim}}/g, votingLink);
+      result = result.replace(/\[odkaz na hlasování\]/g, votingLink); // starší textová varianta v některých šablonách
+    }
+
+    // Alias pro jméno zástupce: {{zastupce_za_jednotku}} == {{jmeno_zastupce}}
+    if (customVariables['jmeno_zastupce'] || customVariables['zastupce_za_jednotku']) {
+      const repName = customVariables['jmeno_zastupce'] || customVariables['zastupce_za_jednotku'];
+      result = result.replace(/{{zastupce_za_jednotku}}/g, repName);
+      result = result.replace(/{{jmeno_zastupce}}/g, repName);
+    }
   }
 
   return result;

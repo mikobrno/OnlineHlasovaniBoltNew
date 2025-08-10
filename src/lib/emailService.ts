@@ -26,6 +26,8 @@ interface OwnerData {
   voting_token: string;
 }
 
+// Backend send is handled by Netlify function `send-email`, which prefers MailerSend (MAILERSEND_API_KEY)
+// and falls back to Gmail SMTP if MailerSend isn't configured.
 interface GmailResponse {
   success: boolean;
   messageId?: string;
@@ -416,7 +418,9 @@ export const testEmailGmail = async (): Promise<{ success: boolean; message: str
         if (ping.ok) {
           return { success: true, message: 'Gmail OAuth není nastaven. SMTP backend je připraven.' };
         }
-      } catch {}
+      } catch (e) {
+        console.warn('Email backend readiness probe failed:', e);
+      }
       return { success: false, message: 'Google OAuth credentials not configured. Check environment variables.' };
     }
 
