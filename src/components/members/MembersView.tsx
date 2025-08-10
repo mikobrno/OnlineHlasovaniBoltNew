@@ -1,20 +1,22 @@
 import React, { useState } from 'react';
-import { Plus, Upload, Search } from 'lucide-react';
+import { Plus, Upload, Search, Users } from 'lucide-react';
 import { useApp } from '../../contexts/AppContextCompat';
+import { useToast } from '../../contexts/ToastContext';
 import { PageHeader } from '../common/PageHeader';
 import { Input } from '../common/Input';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { MemberFormModal } from './MemberFormModal';
 import { ImportMembersModal } from './ImportMembersModal';
-import { Member } from '../../data/mockData';
+import type { Member as MemberType } from '../../data/mockData';
 
 export const MembersView: React.FC = () => {
-  const { members, selectedBuilding, deleteMember } = useApp();
+  const { members, selectedBuilding, deleteMember, importMembers } = useApp();
+  const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editingMember, setEditingMember] = useState<MemberType | null>(null);
 
   const buildingMembers = members.filter(m => m.buildingId === selectedBuilding?.id);
   
@@ -24,14 +26,39 @@ export const MembersView: React.FC = () => {
     member.unit.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleEdit = (member: Member) => {
+  const handleEdit = (member: MemberType) => {
     setEditingMember(member);
     setShowForm(true);
   };
 
-  const handleDelete = (member: Member) => {
+  const handleDelete = (member: MemberType) => {
     if (window.confirm(`Opravdu chcete smazat člena ${member.name}?`)) {
       deleteMember(member.id);
+    }
+  };
+  const handleSeedMembers = async () => {
+    if (!selectedBuilding) {
+      showToast('Nejprve vyberte budovu', 'error');
+      return;
+    }
+    const bId = selectedBuilding.id;
+    const demo: Omit<MemberType, 'id'>[] = [
+      { name: 'Jan Novák', email: 'jan.novak+demo@example.com', phone: '+420601000001', unit: '1.01', voteWeight: 1.0, buildingId: bId },
+      { name: 'Marie Svobodová', email: 'marie.svobodova+demo@example.com', phone: '+420601000002', unit: '1.02', voteWeight: 1.2, buildingId: bId },
+      { name: 'Petr Dvořák', email: 'petr.dvorak+demo@example.com', phone: '+420601000003', unit: '2.01', voteWeight: 0.8, buildingId: bId },
+      { name: 'Lucie Procházková', email: 'lucie.prochazkova+demo@example.com', phone: '+420601000004', unit: '2.02', voteWeight: 1.0, buildingId: bId },
+      { name: 'Karel Černý', email: 'karel.cerny+demo@example.com', phone: '+420601000005', unit: '3.01', voteWeight: 1.5, buildingId: bId },
+      { name: 'Eva Králová', email: 'eva.kralova+demo@example.com', phone: '+420601000006', unit: '3.02', voteWeight: 1.1, buildingId: bId },
+      { name: 'Tomáš Pokorný', email: 'tomas.pokorny+demo@example.com', phone: '+420601000007', unit: '4.01', voteWeight: 0.9, buildingId: bId },
+      { name: 'Alena Jelínková', email: 'alena.jelinkova+demo@example.com', phone: '+420601000008', unit: '4.02', voteWeight: 1.3, buildingId: bId },
+      { name: 'Milan Beneš', email: 'milan.benes+demo@example.com', phone: '+420601000009', unit: '5.01', voteWeight: 1.0, buildingId: bId },
+      { name: 'Hana Fialová', email: 'hana.fialova+demo@example.com', phone: '+420601000010', unit: '5.02', voteWeight: 1.0, buildingId: bId }
+    ];
+    try {
+      await importMembers(demo);
+      showToast(`Přidáno ${demo.length} demo členů`, 'success');
+    } catch {
+      showToast('Nepodařilo se přidat demo členy', 'error');
     }
   };
 
@@ -65,6 +92,10 @@ export const MembersView: React.FC = () => {
         <Button variant="secondary" onClick={() => setShowImport(true)}>
           <Upload className="w-4 h-4 mr-2" />
           Import členů
+        </Button>
+        <Button variant="secondary" onClick={handleSeedMembers} disabled={!selectedBuilding}>
+          <Users className="w-4 h-4 mr-2" />
+          Naplnit test data
         </Button>
       </div>
 

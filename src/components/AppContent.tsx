@@ -14,6 +14,7 @@ export const AppContent: React.FC = () => {
       <AppHeader />
       <Routes>
         <Route path="/vote/:token" element={<VotingPage />} />
+  <Route path="/select-building" element={<BuildingSelector />} />
         <Route path="/*" element={
           !selectedBuilding ? <BuildingSelector /> : <MainApp />
         } />

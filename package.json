@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "start": "vite preview",
+  "preview": "vite preview --port 3000 --strictPort",
+  "start": "vite preview --port 3000 --strictPort",
   "migrate": "node migrateData.js",
   "seed:email-templates": "echo Spustte obsah souboru database/seeds/insert_email_templates.sql v Supabase SQL editoru"
   },
