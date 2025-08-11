@@ -140,7 +140,7 @@ exports.handler = async (event, context) => {
       return result;
     };
 
-    const result = await sendOnce(params);
+  let result = await sendOnce(params);
 
     // Helper: parse XML error code like <result><err>6</err></result>
     const parseXmlError = (text) => {
