@@ -238,9 +238,10 @@ exports.handler = async (event, context) => {
         const hasError = /ERROR|<err>\s*\d+\s*<\/err>/i.test(t);
         const okExplicit = /\bOK\b/i.test(t) || /<result>\s*OK\s*<\/result>/i.test(t) || /queued|accepted/i.test(t);
         const looksLikeId = /\b(id|smsid|msgid)\b\s*[:=]?\s*\d+/i.test(t) || /<id>\s*\d+\s*<\/id>/i.test(t);
-        const nonEmptyNoError = t.length > 0 && !hasError;
-        const ok = (okExplicit || looksLikeId || nonEmptyNoError) && !hasError;
-        return { ok, hasError, raw: t };
+        const emptyOk = t.length === 0; // někteří provideré vrací prázdné tělo při přijetí do fronty
+        const ok = (okExplicit || looksLikeId || emptyOk) && !hasError;
+        const status = okExplicit ? 'accepted' : (looksLikeId ? 'accepted(id)' : (emptyOk ? 'accepted(empty)' : 'unknown'));
+        return { ok, hasError, raw: t, status };
       };
 
       // První výsledek
@@ -275,7 +276,7 @@ exports.handler = async (event, context) => {
                 smsId,
                 normalizedNumber,
         rawResult: altResult,
-        providerStatus: 'accepted(fallback)'
+        providerStatus: altClass.status || 'accepted(fallback)'
               })
             };
           }
@@ -297,7 +298,7 @@ exports.handler = async (event, context) => {
             smsId,
             normalizedNumber,
     rawResult: result,
-    providerStatus: 'accepted'
+    providerStatus: finalClass.status || 'accepted'
           })
         };
       }
