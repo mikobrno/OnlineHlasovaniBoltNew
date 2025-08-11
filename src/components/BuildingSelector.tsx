@@ -19,6 +19,11 @@ export const BuildingSelector: React.FC = () => {
   const [seeding, setSeeding] = React.useState(false);
 
   const seedDemoData = async () => {
+    // Safety: never seed demo data in production
+    if (import.meta.env.PROD) {
+      showToast('Seed demo dat je v produkci zakázán', 'error');
+      return;
+    }
     if (seeding) return;
     setSeeding(true);
     try {
@@ -274,16 +279,19 @@ export const BuildingSelector: React.FC = () => {
               <span>Přidat budovu</span>
             </Button>
             <div className="w-px h-6 bg-gray-200 dark:bg-gray-700"></div>
-            <Button 
-              variant="secondary" 
-              size="sm" 
-              className="flex items-center space-x-2"
-              onClick={seedDemoData}
-              disabled={seeding}
-            >
-              <Users className="w-4 h-4" />
-              <span>{seeding ? 'Plním demo data…' : 'Naplnit demo data'}</span>
-            </Button>
+            {/* Demo seeding is available only in non-production environments */}
+            {!import.meta.env.PROD && (
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="flex items-center space-x-2"
+                onClick={seedDemoData}
+                disabled={seeding}
+              >
+                <Users className="w-4 h-4" />
+                <span>{seeding ? 'Plním demo data…' : 'Naplnit demo data'}</span>
+              </Button>
+            )}
           </div>
         </div>
 

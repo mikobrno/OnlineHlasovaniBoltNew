@@ -11,22 +11,24 @@ interface SMSResponse {
 }
 
 export class SMSService {
+  // Informativní konfigurace (runtime odeslání jde přes serverless funkci)
   private config: SMSbranaConfig;
 
   constructor() {
     this.config = {
-      login: import.meta.env.VITE_SMSBRANA_LOGIN || '',
-      password: import.meta.env.VITE_SMSBRANA_PASSWORD || '',
+  // Tyto hodnoty používáme jen informačně; vlastní odeslání probíhá přes serverless funkci,
+  // která má přístup k runtime proměnným prostředí na Netlify.
+  login: import.meta.env.VITE_SMSBRANA_LOGIN || '',
+  password: import.meta.env.VITE_SMSBRANA_PASSWORD || '',
       apiUrl: 'https://api.smsbrana.cz/smsconnect/http.php'
     };
   }
 
   async sendSMS(phoneNumber: string, message: string): Promise<SMSResponse> {
-    if (!this.config.login || !this.config.password) {
-      console.warn('SMSbrana credentials not configured');
-      return { success: false, message: 'SMS služba není nakonfigurována' };
+    // Pouhé informativní varování v dev, reálné přihlašovací údaje používá serverless funkce
+    if (import.meta.env.DEV && (!this.config.login || !this.config.password)) {
+      console.warn('SMSbrana credentials not found in client env; proceeding via serverless function.');
     }
-
     try {
       // Použijeme Netlify function místo přímého volání API
       const apiUrl = import.meta.env.DEV 
@@ -59,65 +61,44 @@ export class SMSService {
   }
 
   async testConnection(): Promise<boolean> {
-    if (!this.config.login || !this.config.password) {
-      return false;
-    }
-
     try {
-      const params = new URLSearchParams({
-        action: 'check_credit',
-        username: this.config.login,
-        password: this.config.password
-      });
+      const apiUrl = import.meta.env.DEV 
+        ? 'http://localhost:8888/.netlify/functions/sms'
+        : '/.netlify/functions/sms';
 
-      const response = await fetch(this.config.apiUrl, {
+      const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check_credit' })
       });
-
-      const result = await response.text();
-      return !result.includes('ERROR');
-    } catch (error) {
+      const result = await response.json();
+      return Boolean(result?.success);
+  } catch {
       return false;
     }
   }
 
   async getCredit(): Promise<{ success: boolean; message: string; credit?: number }> {
-    if (!this.config.login || !this.config.password) {
-      return { success: false, message: 'SMS služba není nakonfigurována' };
-    }
-
     try {
-      const params = new URLSearchParams({
-        action: 'check_credit',
-        username: this.config.login,
-        password: this.config.password
-      });
+      const apiUrl = import.meta.env.DEV 
+        ? 'http://localhost:8888/.netlify/functions/sms'
+        : '/.netlify/functions/sms';
 
-      const response = await fetch(this.config.apiUrl, {
+      const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check_credit' })
       });
-
-      const result = await response.text();
-      
-      if (result.includes('ERROR')) {
-        return { success: false, message: `Chyba: ${result}` };
-      } else {
-        const credit = parseFloat(result.replace('CREDIT ', ''));
-        return { 
-          success: true, 
-          message: `Dostupný kredit: ${credit} Kč`,
-          credit: credit
+      const result = await response.json();
+      if (result?.success) {
+        return {
+          success: true,
+          message: result?.message || 'OK',
+          credit: result?.credit
         };
       }
-    } catch (error) {
+      return { success: false, message: result?.message || 'Chyba při zjišťování kreditu' };
+  } catch {
       return { success: false, message: 'Chyba při zjišťování kreditu' };
     }
   }

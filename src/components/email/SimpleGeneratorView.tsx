@@ -5,11 +5,15 @@ import { PageHeader } from '../common/PageHeader';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { replaceVariables } from '../../lib/utils';
+import * as emailService from '../../lib/emailService';
 
 export const SimpleGeneratorView: React.FC = () => {
   const { templates, members, selectedBuilding, globalVariables } = useApp();
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [currentMemberIndex, setCurrentMemberIndex] = useState(0);
+  const [testEmail, setTestEmail] = useState('');
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [lastTestResult, setLastTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const availableTemplates = templates.filter(t => 
     t.isGlobal || t.buildingId === selectedBuilding?.id
@@ -39,6 +43,34 @@ export const SimpleGeneratorView: React.FC = () => {
     }
   };
 
+  const sendQuickTest = async () => {
+    const to = testEmail || currentMember?.email || '';
+    if (!to) {
+      setLastTestResult({ ok: false, msg: 'Zadejte e‑mail příjemce nebo vyberte člena.' });
+      return;
+    }
+    setIsSendingTest(true);
+    setLastTestResult(null);
+    try {
+      const subject = selectedTemplate ? generatedSubject || 'Test e‑mail' : 'Test e‑mail z OnlineHlasování';
+      const html = selectedTemplate ? (generatedBody || '<p>Test e‑mail</p>') : `
+        <h2>Test e‑mail z OnlineHlasování</h2>
+        <p>Tento e‑mail byl odeslán přes serverless funkci (Mailjet/SMTP).</p>
+        <p>Čas: ${new Date().toLocaleString('cs-CZ')}</p>
+      `;
+      const res = await emailService.sendEmailViaGmail({ to, subject, html });
+      if (res.success) {
+        setLastTestResult({ ok: true, msg: `E‑mail odeslán na ${to}` });
+      } else {
+        setLastTestResult({ ok: false, msg: res.error || 'Odeslání se nezdařilo' });
+      }
+    } catch (e) {
+      setLastTestResult({ ok: false, msg: e instanceof Error ? e.message : 'Neznámá chyba' });
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -63,10 +95,11 @@ export const SimpleGeneratorView: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="email-template-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 E-mailová šablona
               </label>
               <select
+                id="email-template-select"
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -91,6 +124,7 @@ export const SimpleGeneratorView: React.FC = () => {
                     variant="secondary"
                     onClick={prevMember}
                     disabled={currentMemberIndex === 0}
+                    aria-label="Předchozí příjemce"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
@@ -102,6 +136,7 @@ export const SimpleGeneratorView: React.FC = () => {
                     variant="secondary"
                     onClick={nextMember}
                     disabled={currentMemberIndex === buildingMembers.length - 1}
+                    aria-label="Další příjemce"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -180,6 +215,43 @@ export const SimpleGeneratorView: React.FC = () => {
           </div>
         </Card>
       )}
+
+      {/* Rychlý test odeslání e‑mailu přes backend */}
+      <Card className="p-6 mt-6">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+          Rychlý test odeslání e‑mailu
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Cílový e‑mail
+            </label>
+            <input
+              type="email"
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              placeholder={currentMember?.email || 'např. jan.novak@example.com'}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Pokud pole necháte prázdné a je vybrán člen, použije se jeho e‑mail.
+            </p>
+          </div>
+          <div>
+            <Button onClick={sendQuickTest} disabled={isSendingTest} className="w-full">
+              {isSendingTest ? 'Odesílám…' : 'Odeslat test' }
+            </Button>
+          </div>
+        </div>
+        {lastTestResult && (
+          <div className={`mt-4 text-sm ${lastTestResult.ok ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+            {lastTestResult.msg}
+          </div>
+        )}
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-3">
+          Odesíláno přes serverless funkci (.netlify/functions/send-email) napojenou na Mailjet.
+        </p>
+      </Card>
     </div>
   );
 };

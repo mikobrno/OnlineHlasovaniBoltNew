@@ -365,6 +365,22 @@ CREATE TABLE IF NOT EXISTS manual_vote_notes (
   UNIQUE(vote_id, member_id)
 );
 
+-- Pojistky: doplnění sloupců, které mohou chybět ve starších instancích (idempotentně)
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'member' CHECK (role IN ('member', 'admin', 'observer', 'chairman'));
+ALTER TABLE IF EXISTS vote_delegations ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE IF EXISTS attachments ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS questions ADD COLUMN IF NOT EXISTS question_type TEXT DEFAULT 'yes_no';
+ALTER TABLE IF EXISTS questions ADD COLUMN IF NOT EXISTS quorum_type TEXT DEFAULT 'simple';
+ALTER TABLE IF EXISTS member_votes ADD COLUMN IF NOT EXISTS is_delegated BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS member_votes ADD COLUMN IF NOT EXISTS voting_power_used DECIMAL(10,4) DEFAULT 1.0000;
+
+-- Pojistka: sjednocení CHECK constraintu pro building_variable_definitions.type (některé starší DB nemusí povolovat 'number')
+ALTER TABLE IF EXISTS building_variable_definitions DROP CONSTRAINT IF EXISTS building_variable_definitions_type_check;
+ALTER TABLE IF EXISTS building_variable_definitions
+  ADD CONSTRAINT building_variable_definitions_type_check
+  CHECK (type IN ('text', 'select', 'number'));
+
 -- Vytvoření indexů pro lepší výkon
 CREATE INDEX IF NOT EXISTS idx_members_building_id ON members(building_id);
 CREATE INDEX IF NOT EXISTS idx_members_email ON members(email);
@@ -467,20 +483,30 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Vytvoření triggerů pro updated_at
+-- Vytvoření triggerů pro updated_at (idempotentně)
+DROP TRIGGER IF EXISTS update_buildings_updated_at ON buildings;
 CREATE TRIGGER update_buildings_updated_at BEFORE UPDATE ON buildings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_members_updated_at ON members;
 CREATE TRIGGER update_members_updated_at BEFORE UPDATE ON members FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_email_templates_updated_at ON email_templates;
 CREATE TRIGGER update_email_templates_updated_at BEFORE UPDATE ON email_templates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_global_variables_updated_at ON global_variables;
 CREATE TRIGGER update_global_variables_updated_at BEFORE UPDATE ON global_variables FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Triggery pro audit log (na vybraných tabulkách)
+-- Triggery pro audit log (na vybraných tabulkách) – idempotentně
+DROP TRIGGER IF EXISTS audit_buildings ON buildings;
 CREATE TRIGGER audit_buildings AFTER INSERT OR UPDATE OR DELETE ON buildings FOR EACH ROW EXECUTE FUNCTION create_audit_log();
+DROP TRIGGER IF EXISTS audit_members ON members;
 CREATE TRIGGER audit_members AFTER INSERT OR UPDATE OR DELETE ON members FOR EACH ROW EXECUTE FUNCTION create_audit_log();
+DROP TRIGGER IF EXISTS audit_votes ON votes;
 CREATE TRIGGER audit_votes AFTER INSERT OR UPDATE OR DELETE ON votes FOR EACH ROW EXECUTE FUNCTION create_audit_log();
+DROP TRIGGER IF EXISTS audit_member_votes ON member_votes;
 CREATE TRIGGER audit_member_votes AFTER INSERT OR UPDATE OR DELETE ON member_votes FOR EACH ROW EXECUTE FUNCTION create_audit_log();
+DROP TRIGGER IF EXISTS audit_vote_delegations ON vote_delegations;
 CREATE TRIGGER audit_vote_delegations AFTER INSERT OR UPDATE OR DELETE ON vote_delegations FOR EACH ROW EXECUTE FUNCTION create_audit_log();
 
--- Trigger pro aktualizaci statistik hlasování
+-- Trigger pro aktualizaci statistik hlasování – idempotentně
+DROP TRIGGER IF EXISTS update_vote_stats ON member_votes;
 CREATE TRIGGER update_vote_stats AFTER INSERT OR UPDATE OR DELETE ON member_votes FOR EACH ROW EXECUTE FUNCTION update_vote_statistics();
 
 -- Povolení RLS na všech tabulkách
@@ -508,57 +534,95 @@ ALTER TABLE attachments ENABLE ROW LEVEL SECURITY;
 
 -- Základní RLS policies (pro začátek povolíme vše, později lze zpřísnit)
 -- Pro anonymní přístup (veřejné hlasování)
+DROP POLICY IF EXISTS "Allow anonymous read buildings" ON buildings;
 CREATE POLICY "Allow anonymous read buildings" ON buildings FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow anonymous read members" ON members;
 CREATE POLICY "Allow anonymous read members" ON members FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow anonymous read votes" ON votes;
 CREATE POLICY "Allow anonymous read votes" ON votes FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow anonymous read questions" ON questions;
 CREATE POLICY "Allow anonymous read questions" ON questions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow anonymous read voting_tokens" ON voting_tokens;
 CREATE POLICY "Allow anonymous read voting_tokens" ON voting_tokens FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow anonymous read global_variables" ON global_variables;
 CREATE POLICY "Allow anonymous read global_variables" ON global_variables FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow anonymous read building_variable_definitions" ON building_variable_definitions;
 CREATE POLICY "Allow anonymous read building_variable_definitions" ON building_variable_definitions FOR SELECT USING (true);
 
 -- Pro hlasování
+DROP POLICY IF EXISTS "Allow anonymous insert member_votes" ON member_votes;
 CREATE POLICY "Allow anonymous insert member_votes" ON member_votes FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow anonymous update voting_tokens" ON voting_tokens;
 CREATE POLICY "Allow anonymous update voting_tokens" ON voting_tokens FOR UPDATE USING (true);
 
 -- Pro administrátory (později může být nahrazeno specifickými policies)
+DROP POLICY IF EXISTS "Allow all for admin" ON buildings;
 CREATE POLICY "Allow all for admin" ON buildings FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin members" ON members;
 CREATE POLICY "Allow all for admin members" ON members FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin votes" ON votes;
 CREATE POLICY "Allow all for admin votes" ON votes FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin questions" ON questions;
 CREATE POLICY "Allow all for admin questions" ON questions FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin email_templates" ON email_templates;
 CREATE POLICY "Allow all for admin email_templates" ON email_templates FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin global_variables" ON global_variables;
 CREATE POLICY "Allow all for admin global_variables" ON global_variables FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin building_variable_definitions" ON building_variable_definitions;
 CREATE POLICY "Allow all for admin building_variable_definitions" ON building_variable_definitions FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin observers" ON observers;
 CREATE POLICY "Allow all for admin observers" ON observers FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin voting_tokens" ON voting_tokens;
 CREATE POLICY "Allow all for admin voting_tokens" ON voting_tokens FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin member_votes" ON member_votes;
 CREATE POLICY "Allow all for admin member_votes" ON member_votes FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin manual_vote_attachments" ON manual_vote_attachments;
 CREATE POLICY "Allow all for admin manual_vote_attachments" ON manual_vote_attachments FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin manual_vote_notes" ON manual_vote_notes;
 CREATE POLICY "Allow all for admin manual_vote_notes" ON manual_vote_notes FOR ALL USING (true);
 
 -- Policies pro nové tabulky
+DROP POLICY IF EXISTS "Allow all for admin vote_delegations" ON vote_delegations;
 CREATE POLICY "Allow all for admin vote_delegations" ON vote_delegations FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin notifications" ON notifications;
 CREATE POLICY "Allow all for admin notifications" ON notifications FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin sms_verifications" ON sms_verifications;
 CREATE POLICY "Allow all for admin sms_verifications" ON sms_verifications FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow read audit_log" ON audit_log;
 CREATE POLICY "Allow read audit_log" ON audit_log FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow all for admin vote_analytics" ON vote_analytics;
 CREATE POLICY "Allow all for admin vote_analytics" ON vote_analytics FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin reports" ON reports;
 CREATE POLICY "Allow all for admin reports" ON reports FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin question_responses" ON question_responses;
 CREATE POLICY "Allow all for admin question_responses" ON question_responses FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin proxy_votes" ON proxy_votes;
 CREATE POLICY "Allow all for admin proxy_votes" ON proxy_votes FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all for admin attachments" ON attachments;
 CREATE POLICY "Allow all for admin attachments" ON attachments FOR ALL USING (true);
 
 -- Specifické policies pro hlasování a delegování
+DROP POLICY IF EXISTS "Allow delegation read for participants" ON vote_delegations;
 CREATE POLICY "Allow delegation read for participants" ON vote_delegations FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow delegation create for members" ON vote_delegations;
 CREATE POLICY "Allow delegation create for members" ON vote_delegations FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow delegation update for delegator" ON vote_delegations;
 CREATE POLICY "Allow delegation update for delegator" ON vote_delegations FOR UPDATE USING (true);
 
 -- Policies pro notifikace
+DROP POLICY IF EXISTS "Allow notification read for recipient" ON notifications;
 CREATE POLICY "Allow notification read for recipient" ON notifications FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow notification update for recipient" ON notifications;
 CREATE POLICY "Allow notification update for recipient" ON notifications FOR UPDATE USING (true);
 
 -- Policies pro SMS ověřování  
+DROP POLICY IF EXISTS "Allow SMS verification for voting" ON sms_verifications;
 CREATE POLICY "Allow SMS verification for voting" ON sms_verifications FOR ALL USING (true);
 
 -- Policies pro veřejné attachmenty
+DROP POLICY IF EXISTS "Allow public attachment read" ON attachments;
 CREATE POLICY "Allow public attachment read" ON attachments FOR SELECT USING (is_public = true);
+DROP POLICY IF EXISTS "Allow attachment management" ON attachments;
 CREATE POLICY "Allow attachment management" ON attachments FOR ALL USING (true);
 
 -- Vložení rozšířených globálních proměnných

@@ -15,3 +15,11 @@
   status = 200
 
 # Environment variables are configured in Netlify dashboard
+
+[dev]
+# Port, na kterém běží Vite dev server
+targetPort = 3000
+# Příkaz pro spuštění framework serveru
+command = "npm run dev"
+# Port Netlify Dev proxy (/.netlify/functions/*)
+port = 8888

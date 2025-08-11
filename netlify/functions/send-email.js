@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+// Posíláme výhradně přes Mailjet – žádný SMTP fallback
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,11 +12,30 @@ export const handler = async (event) => {
   }
 
   if (event.httpMethod === 'GET') {
-    // Readiness probe without sending an email
+    // Readiness probe without sending an email (Mailjet status)
+    const mjKey = process.env.MAILJET_API_KEY;
+    const mjSecret = process.env.MAILJET_API_SECRET;
+    const fromEmail = process.env.MAILJET_FROM_EMAIL || null;
+    const fromName = process.env.MAILJET_FROM_NAME || 'Online Hlasování';
+    const missing = [];
+    if (!mjKey) missing.push('MAILJET_API_KEY');
+    if (!mjSecret) missing.push('MAILJET_API_SECRET');
+    if (!fromEmail) missing.push('MAILJET_FROM_EMAIL');
+    if (!fromName) missing.push('MAILJET_FROM_NAME');
+
+    const configured = missing.length === 0;
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      body: JSON.stringify({ success: true, message: 'Email function ready (Mailjet)' }),
+      body: JSON.stringify({ 
+        success: true,
+        provider: 'mailjet',
+        configured,
+        fromEmail,
+        fromName,
+        missing,
+        message: configured ? 'Email function ready (Mailjet)' : 'Mailjet is not fully configured'
+      }),
     };
   }
 
@@ -39,11 +58,11 @@ export const handler = async (event) => {
       };
     }
 
-    // Prefer Mailjet when API key/secret is available
-    const mjKey = process.env.MAILJET_API_KEY;
-    const mjSecret = process.env.MAILJET_API_SECRET;
-    if (mjKey && mjSecret) {
-      const fromEmail = process.env.MAILJET_FROM_EMAIL || from || process.env.GMAIL_USER;
+  // Mailjet je povinný provider
+  const mjKey = process.env.MAILJET_API_KEY;
+  const mjSecret = process.env.MAILJET_API_SECRET;
+  if (mjKey && mjSecret) {
+  const fromEmail = process.env.MAILJET_FROM_EMAIL || from;
       const fromName = process.env.MAILJET_FROM_NAME || 'Online Hlasování';
 
       const payload = {
@@ -74,50 +93,42 @@ export const handler = async (event) => {
         // Mailjet returns Messages array with Status and To Sent/MessageUUID
         const msg = data?.Messages?.[0];
         const messageId = msg?.To?.[0]?.MessageUUID || msg?.CustomID || null;
+        const messageIdNumeric = msg?.To?.[0]?.MessageID || null;
         return {
           statusCode: 200,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          body: JSON.stringify({ success: true, messageId }),
+          body: JSON.stringify({ 
+            success: true, 
+            provider: 'mailjet',
+            status: res.status,
+            messageId,
+            messageIdNumeric,
+            from: { email: fromEmail, name: fromName },
+            to,
+            subject,
+            providerResponse: msg
+          }),
         };
       }
 
       return {
         statusCode: res.status || 500,
         headers: corsHeaders,
-        body: JSON.stringify({ success: false, error: data?.Message || 'Mailjet API error' }),
+        body: JSON.stringify({ 
+          success: false, 
+          provider: 'mailjet',
+          status: res.status || 500,
+          error: data?.Message || 'Mailjet API error',
+          providerResponse: data
+        }),
       };
     }
 
-    // Fallback to Gmail SMTP via App Password
-    const user = process.env.GMAIL_USER;
-    const pass = process.env.GMAIL_APP_PASSWORD;
-
-    if (!user || !pass) {
-      return {
-        statusCode: 500,
-        headers: corsHeaders,
-        body: JSON.stringify({ success: false, error: 'No email provider configured (missing MAILERSEND_API_KEY or Gmail SMTP creds).' }),
-      };
-    }
-
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: { user, pass },
-    });
-
-    const info = await transporter.sendMail({
-      from: from || user,
-      to,
-      subject,
-      html,
-    });
-
+    // Pokud Mailjet není nakonfigurován, vrať jasnou chybu
     return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      body: JSON.stringify({ success: true, messageId: info.messageId }),
+      statusCode: 500,
+      headers: corsHeaders,
+      body: JSON.stringify({ success: false, error: 'Mailjet není nakonfigurován. Nastavte MAILJET_API_KEY, MAILJET_API_SECRET, MAILJET_FROM_EMAIL a MAILJET_FROM_NAME.' }),
     };
   } catch (error) {
     return {

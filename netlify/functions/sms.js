@@ -27,15 +27,16 @@ exports.handler = async (event, context) => {
     
     const params = new URLSearchParams({
       action: action || 'send_sms',
-      username: process.env.VITE_SMSBRANA_LOGIN,
+      login: process.env.VITE_SMSBRANA_LOGIN,
       password: process.env.VITE_SMSBRANA_PASSWORD,
     });
 
     // Přidáme parametry podle akce
     if (action === 'send_sms') {
-      params.append('recipient', phoneNumber?.replace(/\s+/g, '').replace(/^\+/, '') || '');
+      params.append('number', phoneNumber?.replace(/\s+/g, '').replace(/^\+/, '') || '');
       params.append('message', message || '');
       params.append('sender_id', 'OnlineSprava');
+      params.append('unicode', '1');
     }
 
     const response = await fetch('https://api.smsbrana.cz/smsconnect/http.php', {

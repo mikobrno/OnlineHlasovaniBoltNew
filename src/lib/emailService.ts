@@ -5,13 +5,7 @@ interface EmailData {
   from?: string;
 }
 
-interface GmailConfig {
-  clientId: string;
-  clientSecret: string;
-  redirectUri: string;
-  refreshToken: string;
-  accessToken?: string;
-}
+// Gmail/OAuth nepoužíváme – vše jde přes backend (Mailjet)
 
 interface VotingData {
   id: string;
@@ -34,85 +28,17 @@ interface GmailResponse {
   error?: string;
 }
 
-// Gmail API configuration
-const getGmailConfig = (): GmailConfig => ({
-  clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-  clientSecret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
-  redirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI || 'http://localhost:3000',
-  refreshToken: import.meta.env.VITE_GOOGLE_REFRESH_TOKEN || '',
-});
+// Dummy config už nepotřebujeme
 
-// Function to refresh Google access token
-const refreshAccessToken = async (): Promise<string | null> => {
-  const config = getGmailConfig();
-  
-  if (!config.clientId || !config.clientSecret || !config.refreshToken) {
-    console.error('Google OAuth credentials not configured');
-    return null;
-  }
+// Žádné tokeny neřešíme – vše přes backend
 
-  try {
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        refresh_token: config.refreshToken,
-        grant_type: 'refresh_token',
-      }),
-    });
+// Sestavování RFC 2822 není potřeba – backend řeší formát
 
-    const data = await response.json();
-    
-    if (data.access_token) {
-      console.log('Access token refreshed successfully');
-      return data.access_token;
-    } else {
-      console.error('Failed to refresh access token:', data);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error refreshing access token:', error);
-    return null;
-  }
-};
-
-// Function to create email message in RFC 2822 format
-const createEmailMessage = (emailData: EmailData): string => {
-  const from = emailData.from || 'noreply@onlinehlasovani.cz';
-  const boundary = '----boundary_' + Date.now();
-  
-  const message = [
-    `From: ${from}`,
-    `To: ${emailData.to}`,
-    `Subject: ${emailData.subject}`,
-    'MIME-Version: 1.0',
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    '',
-    `--${boundary}`,
-    'Content-Type: text/html; charset=UTF-8',
-    'Content-Transfer-Encoding: quoted-printable',
-    '',
-    emailData.html,
-    '',
-    `--${boundary}--`
-  ].join('\r\n');
-
-  // Encode message in base64url format
-  return btoa(message)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-};
-
-// Helper to send via Netlify Function (SMTP) when OAuth config chybí
+// Odeslání přes Netlify Function (Mailjet / SMTP fallback podle serveru)
 const sendViaBackendSMTP = async (emailData: EmailData): Promise<GmailResponse> => {
   try {
-  const base = import.meta.env.VITE_FUNCTIONS_BASE_URL || '';
-  const url = base ? `${base}/.netlify/functions/send-email` : '/.netlify/functions/send-email';
+  const base = import.meta.env.VITE_FUNCTIONS_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8888' : '');
+  const url = `${base}/.netlify/functions/send-email`;
   const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -126,51 +52,9 @@ const sendViaBackendSMTP = async (emailData: EmailData): Promise<GmailResponse> 
   }
 };
 
-// Main function to send email via Gmail API (or SMTP fallback)
+// Hlavní funkce: vždy použij backend (Mailjet)
 export const sendEmailViaGmail = async (emailData: EmailData): Promise<GmailResponse> => {
-  try {
-    const cfg = getGmailConfig();
-    // Fallback: pokud není nakonfigurován OAuth, použij SMTP backend
-    if (!cfg.clientId || !cfg.clientSecret || !cfg.refreshToken) {
-      return await sendViaBackendSMTP(emailData);
-    }
-
-    const accessToken = await refreshAccessToken();
-    
-    if (!accessToken) {
-      return { success: false, error: 'Failed to get access token' };
-    }
-
-    const emailMessage = createEmailMessage(emailData);
-    
-    console.log('Sending email via Gmail API:', { to: emailData.to, subject: emailData.subject });
-
-    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        raw: emailMessage
-      }),
-    });
-
-  const result = await response.json();
-    
-    if (response.ok && result.id) {
-      console.log('Email sent successfully via Gmail API:', result.id);
-      return { success: true, messageId: result.id };
-    } else {
-      console.error('Gmail API error:', result);
-      return { success: false, error: result.error?.message || 'Gmail API error' };
-    }
-
-  } catch (error) {
-  console.error('Error sending email via Gmail API:', error);
-  // poslední fallback na SMTP backend (např. když je dočasný výpadek Google)
   return await sendViaBackendSMTP(emailData);
-  }
 };
 
 // Funkce pro generování předmětů emailů
@@ -406,60 +290,16 @@ export const sendVotingEndEmail = async (owner: OwnerData, voting: VotingData): 
 
 // Test funkce pro ověření Gmail API spojení
 export const testEmailGmail = async (): Promise<{ success: boolean; message: string }> => {
+  // Jednoduchý test dostupnosti backendu (Mailjet)
   try {
-    const config = getGmailConfig();
-    
-    if (!config.clientId || !config.clientSecret || !config.refreshToken) {
-      // otestuj dostupnost backendové SMTP funkce jako alternativu
-      try {
-        const base = import.meta.env.VITE_FUNCTIONS_BASE_URL || '';
-        const url = base ? `${base}/.netlify/functions/send-email` : '/.netlify/functions/send-email';
-        const ping = await fetch(url, { method: 'GET' });
-        if (ping.ok) {
-          return { success: true, message: 'Gmail OAuth není nastaven. SMTP backend je připraven.' };
-        }
-      } catch (e) {
-        console.warn('Email backend readiness probe failed:', e);
-      }
-      return { success: false, message: 'Google OAuth credentials not configured. Check environment variables.' };
+  const base = import.meta.env.VITE_FUNCTIONS_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8888' : '');
+  const url = `${base}/.netlify/functions/send-email`;
+    const ping = await fetch(url, { method: 'GET' });
+    if (ping.ok) {
+      return { success: true, message: 'Backend e‑mailů je připraven (Mailjet).' };
     }
-
-    // Test access token refresh
-    const accessToken = await refreshAccessToken();
-    
-    if (!accessToken) {
-      return { 
-        success: false, 
-        message: 'Failed to refresh access token. Check Google OAuth configuration.' 
-      };
-    }
-
-    // Test Gmail API connection by checking profile
-    const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-      },
-    });
-
-    if (response.ok) {
-      const profile = await response.json();
-      return { 
-        success: true, 
-        message: `Gmail API connected successfully. Email: ${profile.emailAddress}` 
-      };
-    } else {
-      const error = await response.json();
-      return { 
-        success: false, 
-        message: `Gmail API error: ${error.error?.message || 'Unknown error'}` 
-      };
-    }
-
+    return { success: false, message: `Backend není dostupný (HTTP ${ping.status}).` };
   } catch (error) {
-    console.error('Gmail API test failed:', error);
-    return { 
-      success: false, 
-      message: `Connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}` 
-    };
+    return { success: false, message: `Backend test selhal: ${error instanceof Error ? error.message : 'Neznámá chyba'}` };
   }
 };

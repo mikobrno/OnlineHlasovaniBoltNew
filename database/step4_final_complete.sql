@@ -359,15 +359,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Přidáme audit triggery na klíčové tabulky
+-- Přidáme audit triggery na klíčové tabulky (idempotentně)
+DROP TRIGGER IF EXISTS audit_votes_trigger ON votes;
 CREATE TRIGGER audit_votes_trigger
     AFTER INSERT OR UPDATE OR DELETE ON votes
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
 
+DROP TRIGGER IF EXISTS audit_member_votes_trigger ON member_votes;
 CREATE TRIGGER audit_member_votes_trigger
     AFTER INSERT OR UPDATE OR DELETE ON member_votes
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
 
+DROP TRIGGER IF EXISTS audit_members_trigger ON members;
 CREATE TRIGGER audit_members_trigger
     AFTER INSERT OR UPDATE OR DELETE ON members
     FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
