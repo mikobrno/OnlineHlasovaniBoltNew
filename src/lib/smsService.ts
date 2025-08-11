@@ -38,9 +38,9 @@ export class SMSService {
       const base = envBase
         ? (isEnvLocalhost ? (isDev || hostname === 'localhost' ? envBase : '') : envBase)
         : (isDev ? 'http://localhost:8888' : '');
-      const apiUrl = `${base || ''}/.netlify/functions/sms`;
+  const apiUrl = `${base || ''}/.netlify/functions/sms`;
 
-      const response = await fetch(apiUrl, {
+  const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -52,8 +52,9 @@ export class SMSService {
         })
       });
 
-      const result = await response.json();
-      return result;
+  const data = await response.json();
+  console.debug('SMS send response', { url: apiUrl, status: response.status, data });
+  return data;
     } catch (error) {
       console.error('SMS sending error:', error);
       return { success: false, message: 'Chyba při odesílání SMS' };
@@ -74,15 +75,16 @@ export class SMSService {
       const base = envBase
         ? (isEnvLocalhost ? (isDev || hostname === 'localhost' ? envBase : '') : envBase)
         : (isDev ? 'http://localhost:8888' : '');
-      const apiUrl = `${base || ''}/.netlify/functions/sms`;
+  const apiUrl = `${base || ''}/.netlify/functions/sms`;
 
-      const response = await fetch(apiUrl, {
+  const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'check_credit' })
       });
-      const result = await response.json();
-      return Boolean(result?.success);
+  const data = await response.json();
+  console.debug('SMS credit test response', { url: apiUrl, status: response.status, data });
+  return Boolean(data?.success);
   } catch {
       return false;
     }
@@ -97,15 +99,16 @@ export class SMSService {
       const base = envBase
         ? (isEnvLocalhost ? (isDev || hostname === 'localhost' ? envBase : '') : envBase)
         : (isDev ? 'http://localhost:8888' : '');
-      const apiUrl = `${base || ''}/.netlify/functions/sms`;
+  const apiUrl = `${base || ''}/.netlify/functions/sms`;
 
-      const response = await fetch(apiUrl, {
+  const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'check_credit' })
       });
-      const result = await response.json();
-      if (result?.success) {
+  const result = await response.json();
+  console.debug('SMS get credit response', { url: apiUrl, status: response.status, result });
+  if (result?.success) {
         return {
           success: true,
           message: result?.message || 'OK',
