@@ -113,12 +113,10 @@ exports.handler = async (event, context) => {
       params.append('number', normalizedNumber);
       params.append('message', message || '');
       // Odesílatel je klíčový. Posíláme ho vždy, i když je prázdný, aby se použil default.
-      const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
-      params.append('sender_id', senderId);
-      params.append('unicode', '1');
-      // Přidáme standardní parametry pro SMSbrana
-      params.append('route', 'economy');
-      params.append('type', 'sms');
+  const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
+  if (senderId) params.append('sender_id', senderId);
+  params.append('unicode', '1');
+  // Neposíláme route/type – ponecháme výchozí chování poskytovatele
     }
 
     const sendOnce = async (searchParams) => {
@@ -236,11 +234,47 @@ exports.handler = async (event, context) => {
       // send_sms
       const okLike = (txt) => /\bOK\b/i.test(txt) || /<result>\s*OK\s*<\/result>/i.test(txt);
 
-      console.log('SMS send - final attempt result:', result);
+      // První výsledek
+      console.log('SMS send - first result:', result);
+
+      if (!okLike(result)) {
+        // Zkus jednoduchý fallback: parametr "numbers" a bez sender_id/route/type
+        const firstErr = parseXmlError(result);
+        if (firstErr?.code === 6) {
+          const alt = new URLSearchParams();
+          alt.append('action', 'send_sms');
+          alt.append('login', (process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || ''));
+          alt.append('password', (process.env.SMSBRANA_PASSWORD || process.env.VITE_SMSBRANA_PASSWORD || ''));
+          alt.append('numbers', normalizedNumber);
+          alt.append('message', message || '');
+          alt.append('unicode', '1');
+
+          const altResult = await sendOnce(alt);
+          console.log('SMS send - fallback(numbers) result:', altResult);
+
+          if (okLike(altResult)) {
+            const smsId = (altResult.split(' ')[1] || '').trim();
+            return {
+              statusCode: 200,
+              headers,
+              body: JSON.stringify({ 
+                success: true, 
+                message: 'SMS byla odeslána', 
+                smsId,
+                normalizedNumber,
+                rawResult: altResult
+              })
+            };
+          }
+
+          // Přepiš result pro finální hlášení
+          result = altResult;
+        }
+      }
 
       if (okLike(result)) {
         const smsId = (result.split(' ')[1] || '').trim();
-    return {
+        return {
           statusCode: 200,
           headers,
           body: JSON.stringify({ 
