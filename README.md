@@ -170,7 +170,24 @@ npx netlify deploy --prod --dir=dist
 
 ### Email konfigurace
 
-Pro odesílání emailů nastavte SMTP v Supabase nebo použijte Supabase Edge Functions.
+Preferovaný způsob v této app je serverless funkce `/.netlify/functions/send-email`:
+
+- Pokud jsou nastaveny proměnné `MAILJET_API_KEY` a `MAILJET_API_SECRET`, maily se posílají přes Mailjet API v3.1.
+- Pokud Mailjet není nastaven, funkce spadne na Gmail SMTP (GMAIL_USER + GMAIL_APP_PASSWORD).
+
+Nastavení (Netlify → Site settings → Environment variables):
+
+```
+MAILJET_API_KEY=xxxxxxxxxxxxxxxx
+MAILJET_API_SECRET=xxxxxxxxxxxxxxxx
+MAILJET_FROM_EMAIL=notify@vas-domena.cz
+MAILJET_FROM_NAME=Online Hlasování
+# Volitelný fallback:
+GMAIL_USER=you@gmail.com
+GMAIL_APP_PASSWORD=xxxx xxxx xxxx xxxx
+```
+
+Lokálně můžete spustit Netlify Dev a směrovat požadavky přes `VITE_FUNCTIONS_BASE_URL=http://localhost:8888`.
 
 ### SMS konfigurace
 

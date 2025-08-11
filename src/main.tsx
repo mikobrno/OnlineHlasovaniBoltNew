@@ -5,19 +5,20 @@ import App from './App.tsx';
 import './index.css';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
-import { AuthProvider } from './contexts/AuthContext';
-import { AppProvider } from './contexts/AppContext';
+import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext';
+import { SupabaseAppProvider } from './contexts/SupabaseAppContext';
 
+// POUZE SUPABASE - žádné mock data!
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <ThemeProvider>
         <ToastProvider>
-          <AuthProvider>
-            <AppProvider>
+          <SupabaseAuthProvider>
+            <SupabaseAppProvider>
               <App />
-            </AppProvider>
-          </AuthProvider>
+            </SupabaseAppProvider>
+          </SupabaseAuthProvider>
         </ToastProvider>
       </ThemeProvider>
     </BrowserRouter>

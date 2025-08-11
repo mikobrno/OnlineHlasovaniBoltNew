@@ -1,21 +1,25 @@
 [build]
-  publish = "dist"
   command = "npm run build"
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "18"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-[functions]
-  external_node_modules = ["@supabase/supabase-js"]
+# Environment variables are configured in Netlify dashboard
 
-# Environment variables for Netlify (these will be set in Netlify dashboard)
-# VITE_SUPABASE_URL
-# VITE_SUPABASE_ANON_KEY
-# VITE_GEMINI_API_KEY
-# VITE_SMSBRANA_LOGIN
-# VITE_SMSBRANA_PASSWORD
+[dev]
+# Port, na kterém běží Vite dev server
+targetPort = 3000
+# Příkaz pro spuštění framework serveru
+command = "npm run dev"
+# Port Netlify Dev proxy (/.netlify/functions/*)
+port = 8888

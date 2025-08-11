@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Supabase připojení</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Test Supabase připojení</h1>
+    <div id="results"></div>
+    
+    <script>
+        const supabaseUrl = 'https://nehlqaoqmhdvyncvizcc.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5laGxxYW9xbWhkdnluY3ZpemNjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwNzY1OTEsImV4cCI6MjA2OTY1MjU5MX0.poCWT_JCWnP5t0FvQjk3-VLKRE2o59EvBq7GoPcwRao';
+        
+        const { createClient } = supabase;
+        const client = createClient(supabaseUrl, supabaseKey);
+        
+        async function testDatabase() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>Testování připojení...</p>';
+            
+            try {
+                const { data, error } = await client
+                    .from('buildings')
+                    .select('*')
+                    .limit(1);
+                
+                if (error) {
+                    resultsDiv.innerHTML = `
+                        <h2 style="color: red;">Chyba:</h2>
+                        <pre>${JSON.stringify(error, null, 2)}</pre>
+                        <h3>Řešení:</h3>
+                        <p>Musíte vypnout RLS v Supabase SQL editoru.</p>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = `
+                        <h2 style="color: green;">Úspěch!</h2>
+                        <p>Připojení k databázi funguje.</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (err) {
+                resultsDiv.innerHTML = `
+                    <h2 style="color: red;">Network Error:</h2>
+                    <pre>${err.message}</pre>
+                `;
+            }
+        }
+        
+        // Spustit test po načtení stránky
+        window.onload = testDatabase;
+    </script>
+</body>
+</html>

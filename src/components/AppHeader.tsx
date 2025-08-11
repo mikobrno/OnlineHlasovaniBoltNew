@@ -1,17 +1,20 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useApp } from '../contexts/AppContextCompat';
 import { Building2, Sun, Moon, LogOut, User } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
-import { useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/SupabaseAuthContext';
 import { Button } from './common/Button';
 
 export const AppHeader: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const { selectedBuilding } = useApp();
+  const navigate = useNavigate();
 
   const handleLogoClick = () => {
-    window.location.reload(); // Simple solution to reset state
+  // Přesměrování na výběr budov (speciální resetovací cesta)
+  navigate('/select-building');
   };
 
   const handleLogout = () => {

@@ -1,0 +1,19 @@
+AddType application/javascript .js
+AddType application/javascript .mjs
+AddType text/css .css
+
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</IfModule>
+
+# Fallback to index.html for SPA
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /OnlineHlasovaniBoltNew/
+    RewriteRule ^index\.html$ - [L]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . /OnlineHlasovaniBoltNew/index.html [L]
+</IfModule>

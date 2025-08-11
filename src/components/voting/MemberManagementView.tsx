@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, UserCheck, Edit, FileDown, Send } from 'lucide-react';
+import { Mail, UserCheck, Edit, FileDown, Send, Paperclip, FileText } from 'lucide-react';
 import { Vote } from '../../data/mockData';
 import { useApp } from '../../contexts/AppContextCompat';
 import { useToast } from '../../contexts/ToastContext';
@@ -239,7 +239,12 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
               })}
             </tbody>
           </table>
-          
+        </div>
+        
+        <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="text-sm text-gray-500 dark:text-gray-400">
+            Celkem členů: {buildingMembers.length} | Hlasovalo: {votedMembers.length}
+          </div>
           <div className="flex space-x-2">
             <Button onClick={() => setShowInvitationModal(true)}>
               <Send className="w-4 h-4 mr-2" />
@@ -274,14 +279,14 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
             vote={vote}
             memberId={selectedMemberId}
           />
-          
-          <VotingInvitationModal
-            isOpen={showInvitationModal}
-            onClose={() => setShowInvitationModal(false)}
-            vote={vote}
-          />
         </>
       )}
+      
+      <VotingInvitationModal
+        isOpen={showInvitationModal}
+        onClose={() => setShowInvitationModal(false)}
+        vote={vote}
+      />
     </div>
   );
 };

@@ -369,6 +369,14 @@ CREATE TABLE IF NOT EXISTS manual_vote_notes (
 -- INDEXY PRO VÝKON
 -- ========================================
 
+-- Pojistky: doplnění sloupců, které mohou chybět ve starších instancích (idempotentně)
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE IF EXISTS members ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'member' CHECK (role IN ('member', 'admin', 'observer', 'chairman'));
+ALTER TABLE IF EXISTS vote_delegations ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE IF EXISTS attachments ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false;
+ALTER TABLE IF EXISTS questions ADD COLUMN IF NOT EXISTS question_type TEXT DEFAULT 'yes_no';
+ALTER TABLE IF EXISTS questions ADD COLUMN IF NOT EXISTS quorum_type TEXT DEFAULT 'simple';
+
 -- Vytvoření indexů pro lepší výkon
 CREATE INDEX IF NOT EXISTS idx_members_building_id ON members(building_id);
 CREATE INDEX IF NOT EXISTS idx_members_email ON members(email);
@@ -479,20 +487,30 @@ $$ language 'plpgsql';
 -- TRIGGERY
 -- ========================================
 
--- Vytvoření triggerů pro updated_at
+-- Vytvoření triggerů pro updated_at (idempotentně)
+DROP TRIGGER IF EXISTS update_buildings_updated_at ON buildings;
 CREATE TRIGGER update_buildings_updated_at BEFORE UPDATE ON buildings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_members_updated_at ON members;
 CREATE TRIGGER update_members_updated_at BEFORE UPDATE ON members FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_email_templates_updated_at ON email_templates;
 CREATE TRIGGER update_email_templates_updated_at BEFORE UPDATE ON email_templates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_global_variables_updated_at ON global_variables;
 CREATE TRIGGER update_global_variables_updated_at BEFORE UPDATE ON global_variables FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Triggery pro audit log (na vybraných tabulkách)
+-- Triggery pro audit log (na vybraných tabulkách) – idempotentně
+DROP TRIGGER IF EXISTS audit_buildings ON buildings;
 CREATE TRIGGER audit_buildings AFTER INSERT OR UPDATE OR DELETE ON buildings FOR EACH ROW EXECUTE FUNCTION create_audit_log();
+DROP TRIGGER IF EXISTS audit_members ON members;
 CREATE TRIGGER audit_members AFTER INSERT OR UPDATE OR DELETE ON members FOR EACH ROW EXECUTE FUNCTION create_audit_log();
+DROP TRIGGER IF EXISTS audit_votes ON votes;
 CREATE TRIGGER audit_votes AFTER INSERT OR UPDATE OR DELETE ON votes FOR EACH ROW EXECUTE FUNCTION create_audit_log();
+DROP TRIGGER IF EXISTS audit_member_votes ON member_votes;
 CREATE TRIGGER audit_member_votes AFTER INSERT OR UPDATE OR DELETE ON member_votes FOR EACH ROW EXECUTE FUNCTION create_audit_log();
+DROP TRIGGER IF EXISTS audit_vote_delegations ON vote_delegations;
 CREATE TRIGGER audit_vote_delegations AFTER INSERT OR UPDATE OR DELETE ON vote_delegations FOR EACH ROW EXECUTE FUNCTION create_audit_log();
 
--- Trigger pro aktualizaci statistik hlasování
+-- Trigger pro aktualizaci statistik hlasování – idempotentně
+DROP TRIGGER IF EXISTS update_vote_stats ON member_votes;
 CREATE TRIGGER update_vote_stats AFTER INSERT OR UPDATE OR DELETE ON member_votes FOR EACH ROW EXECUTE FUNCTION update_vote_statistics();
 
 -- ========================================

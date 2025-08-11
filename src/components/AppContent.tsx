@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { useApp } from '../contexts/AppContext';
+import { useApp } from '../contexts/AppContextCompat';
 import { AppHeader } from './AppHeader';
 import { BuildingSelector } from './BuildingSelector';
 import { MainApp } from './MainApp';
@@ -14,6 +14,7 @@ export const AppContent: React.FC = () => {
       <AppHeader />
       <Routes>
         <Route path="/vote/:token" element={<VotingPage />} />
+  <Route path="/select-building" element={<BuildingSelector />} />
         <Route path="/*" element={
           !selectedBuilding ? <BuildingSelector /> : <MainApp />
         } />

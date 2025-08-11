@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Save, RotateCcw, Globe, Mail, Shield, Database, Bell, Palette } from 'lucide-react';
+import { Save, RotateCcw, Globe, Mail, Shield, Database, Bell, Palette, Send, TestTube, CreditCard } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
+import { smsService } from '../../lib/smsService';
 
 interface AppSettings {
   // Obecné nastavení
@@ -78,6 +79,14 @@ export const SettingsView: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [hasChanges, setHasChanges] = useState(false);
   const [activeSection, setActiveSection] = useState<string>('general');
+  
+  // SMS test state
+  const [testPhone, setTestPhone] = useState('');
+  const [testMessage, setTestMessage] = useState('Testovací SMS z OnlineSpráva aplikace. SMS služba funguje správně!');
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [creditInfo, setCreditInfo] = useState<{ credit?: number; message: string } | null>(null);
+  const [isLoadingCredit, setIsLoadingCredit] = useState(false);
 
   const handleSettingChange = (key: keyof AppSettings, value: any) => {
     setSettings(prev => ({
@@ -98,6 +107,71 @@ export const SettingsView: React.FC = () => {
     setSettings(defaultSettings);
     setHasChanges(false);
     showToast('Nastavení bylo resetováno', 'info');
+  };
+
+  // SMS test functions
+  const handleTestSMS = async () => {
+    if (!testPhone.trim()) {
+      showToast('Zadejte telefonní číslo', 'error');
+      return;
+    }
+
+    setIsTesting(true);
+    setTestResult(null);
+
+    try {
+      const result = await smsService.sendSMS(testPhone, testMessage);
+      setTestResult(result);
+      
+      if (result.success) {
+        showToast('Test SMS byla úspěšně odeslána!', 'success');
+      } else {
+        showToast(`Chyba při odesílání: ${result.message}`, 'error');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
+      setTestResult({ success: false, message: errorMessage });
+      showToast(`Chyba při odesílání: ${errorMessage}`, 'error');
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setIsTesting(true);
+    
+    try {
+      const isConnected = await smsService.testConnection();
+      
+      if (isConnected) {
+        showToast('Připojení k SMSbrana.cz je funkční!', 'success');
+      } else {
+        showToast('Připojení k SMSbrana.cz se nezdařilo', 'error');
+      }
+    } catch (error) {
+      showToast('Chyba při testování připojení', 'error');
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const handleGetCredit = async () => {
+    setIsLoadingCredit(true);
+    
+    try {
+      const creditResult = await smsService.getCredit();
+      setCreditInfo(creditResult);
+      
+      if (creditResult.success) {
+        showToast(creditResult.message, 'success');
+      } else {
+        showToast(`Chyba při zjišťování kreditu: ${creditResult.message}`, 'error');
+      }
+    } catch (error) {
+      showToast('Chyba při komunikaci se službou', 'error');
+    } finally {
+      setIsLoadingCredit(false);
+    }
   };
 
   const sections = [
@@ -218,46 +292,154 @@ export const SettingsView: React.FC = () => {
   );
 
   const renderSMSSettings = () => (
-    <Card className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-        SMS nastavení
-      </h3>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            SMS poskytovatel
-          </label>
-          <select
-            value={settings.smsProvider}
-            onChange={(e) => handleSettingChange('smsProvider', e.target.value)}
-            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="smsbrana">SMSbrana.cz</option>
-            <option value="twilio">Twilio</option>
-            <option value="nexmo">Vonage (Nexmo)</option>
-          </select>
+    <div className="space-y-6">
+      <Card className="p-6">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+          SMS nastavení
+        </h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              SMS poskytovatel
+            </label>
+            <select
+              value={settings.smsProvider}
+              onChange={(e) => handleSettingChange('smsProvider', e.target.value)}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="smsbrana">SMSbrana.cz</option>
+              <option value="twilio">Twilio</option>
+              <option value="nexmo">Vonage (Nexmo)</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Uživatelské jméno"
+              value={settings.smsUsername}
+              onChange={(e) => handleSettingChange('smsUsername', e.target.value)}
+            />
+            <Input
+              label="Heslo"
+              type="password"
+              value={settings.smsPassword}
+              onChange={(e) => handleSettingChange('smsPassword', e.target.value)}
+            />
+          </div>
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              <strong>Poznámka:</strong> Pro SMSbrana.cz použijte přihlašovací údaje z vašeho účtu. 
+              Tyto údaje jsou také potřeba v .env souboru jako VITE_SMSBRANA_LOGIN a VITE_SMSBRANA_PASSWORD.
+            </p>
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Uživatelské jméno"
-            value={settings.smsUsername}
-            onChange={(e) => handleSettingChange('smsUsername', e.target.value)}
-          />
-          <Input
-            label="Heslo"
-            type="password"
-            value={settings.smsPassword}
-            onChange={(e) => handleSettingChange('smsPassword', e.target.value)}
-          />
+      </Card>
+
+      {/* SMS Test Section */}
+      <Card className="p-6">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+          <TestTube className="w-5 h-5 mr-2" />
+          Test SMS služby
+        </h3>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Test Connection & Credit */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Test připojení a kredit</h4>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Ověří připojení k SMSbrana.cz a zobrazí dostupný kredit.
+            </p>
+            <div className="flex space-x-2">
+              <Button
+                onClick={handleTestConnection}
+                disabled={isTesting}
+                variant="secondary"
+                className="flex-1"
+              >
+                {isTesting ? 'Testování...' : 'Test připojení'}
+              </Button>
+              <Button
+                onClick={handleGetCredit}
+                disabled={isLoadingCredit}
+                className="flex-1"
+              >
+                <CreditCard className="w-4 h-4 mr-2" />
+                {isLoadingCredit ? 'Načítání...' : 'Zjistit kredit'}
+              </Button>
+            </div>
+            
+            {creditInfo && (
+              <div className={`p-4 rounded-lg ${
+                creditInfo.credit !== undefined 
+                  ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200' 
+                  : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
+              }`}>
+                <p className="font-medium">
+                  {creditInfo.credit !== undefined ? '💰 Kredit dostupný' : '❌ Chyba kreditu'}
+                </p>
+                <p className="text-sm mt-1">{creditInfo.message}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Send Test SMS */}
+          <div className="space-y-4">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Odeslat test SMS</h4>
+            
+            <Input
+              label="Telefonní číslo"
+              type="tel"
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value)}
+              placeholder="+420 123 456 789"
+            />
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Text zprávy
+              </label>
+              <textarea
+                value={testMessage}
+                onChange={(e) => setTestMessage(e.target.value)}
+                rows={3}
+                maxLength={160}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Text SMS zprávy..."
+              />
+              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-500 mt-1">
+                <span>SMS zpráva (standardní tarif)</span>
+                <span>{testMessage.length}/160 znaků</span>
+              </div>
+            </div>
+            
+            <Button
+              onClick={handleTestSMS}
+              disabled={isTesting || !testPhone.trim() || !testMessage.trim()}
+              className="w-full"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              {isTesting ? 'Odesílání...' : 'Odeslat test SMS'}
+            </Button>
+          </div>
         </div>
-        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-          <p className="text-sm text-blue-800 dark:text-blue-200">
-            <strong>Poznámka:</strong> Pro SMSbrana.cz použijte přihlašovací údaje z vašeho účtu. 
-            Tyto údaje jsou také potřeba v .env souboru jako VITE_SMSBRANA_LOGIN a VITE_SMSBRANA_PASSWORD.
-          </p>
-        </div>
-      </div>
-    </Card>
+
+        {/* Test Result */}
+        {testResult && (
+          <div className="mt-6 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Výsledek testu</h4>
+            <div className={`p-3 rounded ${
+              testResult.success 
+                ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200' 
+                : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
+            }`}>
+              <p className="font-medium">
+                {testResult.success ? 'SMS úspěšně odeslána!' : 'Chyba při odesílání SMS!'}
+              </p>
+              <p className="text-sm mt-1">{testResult.message}</p>
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 
   const renderSecuritySettings = () => (
