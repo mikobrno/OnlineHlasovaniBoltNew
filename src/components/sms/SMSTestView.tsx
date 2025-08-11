@@ -14,7 +14,7 @@ export const SMSTestView: React.FC = () => {
   const [testMessage, setTestMessage] = useState('Testovací SMS z OnlineSpráva aplikace. SMS služba funguje správně!');
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<SMSResultView | null>(null);
-  const [creditInfo, setCreditInfo] = useState<{ credit?: number; message: string; rawResult?: string } | null>(null);
+  const [creditInfo, setCreditInfo] = useState<{ credit?: number; message: string; rawResult?: string; debugInfo?: { patterns: string[] } } | null>(null);
   const [isLoadingCredit, setIsLoadingCredit] = useState(false);
 
   const handleTestSMS = async () => {
@@ -300,6 +300,19 @@ export const SMSTestView: React.FC = () => {
             </div>
           </div>
         </div>
+        
+        {creditInfo && creditInfo.debugInfo && (
+          <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 rounded-lg">
+            <p className="text-sm">
+              <strong>🔍 Debug parsing kreditu:</strong>
+            </p>
+            <div className="text-xs mt-1">
+              {creditInfo.debugInfo.patterns?.map((pattern, idx) => (
+                <div key={idx}>{pattern}</div>
+              ))}
+            </div>
+          </div>
+        )}
         
         <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 rounded-lg">
           <p className="text-sm">

@@ -141,24 +141,45 @@ exports.handler = async (event, context) => {
           })
         };
       } else {
-        // Vyparsuj číslo z odpovědi (preferuj XML <credit> a "credit" vzory)
+        // Robustní parsing kreditu s debug informacemi
         let credit = NaN;
-        // 1) XML <credit>123</credit>
-        const xmlMatch = (result.match(/<credit>\s*([0-9]+(?:[.,][0-9]+)?)\s*<\/credit>/i) || [])[1];
+        const debugInfo = { patterns: [] };
+        
+        // 1) XML <credit>123</credit> nebo <credit>123.45</credit>
+        const xmlMatch = result.match(/<credit>\s*([0-9]+(?:[.,][0-9]+)?)\s*<\/credit>/i);
         if (xmlMatch) {
-          credit = parseFloat(xmlMatch.replace(',', '.'));
+          credit = parseFloat(xmlMatch[1].replace(',', '.'));
+          debugInfo.patterns.push(`XML: ${xmlMatch[1]} → ${credit}`);
         }
-        // 2) Text "credit ..."
+        
+        // 2) Vzor "credit: 200" nebo "kredit 200 Kč" (case insensitive)
         if (isNaN(credit)) {
-          const credMatch = (result.match(/credit[^0-9-]*(-?\d+(?:[.,]\d+)?)/i) || [])[1];
-          if (credMatch) credit = parseFloat(credMatch.replace(',', '.'));
+          const credMatch = result.match(/(?:credit|kredit)[\s:]*([0-9]+(?:[.,][0-9]+)?)/i);
+          if (credMatch) {
+            credit = parseFloat(credMatch[1].replace(',', '.'));
+            debugInfo.patterns.push(`Text: ${credMatch[0]} → ${credit}`);
+          }
         }
-        // 3) Poslední číslo v řetězci (vyhne se XML verzi 1.0)
+        
+        // 3) Vzor "200 Kč" nebo "200Kč"
         if (isNaN(credit)) {
-          const allNums = result.match(/-?\d+(?:[.,]\d+)?/g);
-          if (allNums && allNums.length) {
-            const last = allNums[allNums.length - 1];
-            credit = parseFloat(last.replace(',', '.'));
+          const czMatch = result.match(/([0-9]+(?:[.,][0-9]+)?)\s*Kč/i);
+          if (czMatch) {
+            credit = parseFloat(czMatch[1].replace(',', '.'));
+            debugInfo.patterns.push(`CZK: ${czMatch[0]} → ${credit}`);
+          }
+        }
+        
+        // 4) Hledáme "200" jako standalone číslo (ne součást XML verze)
+        if (isNaN(credit)) {
+          const standalone = result.match(/\b([0-9]+(?:[.,][0-9]+)?)\b/g);
+          if (standalone) {
+            // Vyfiltruj "1.0" a jiná podezřelá čísla
+            const filtered = standalone.filter(n => !['1.0', '0', '1'].includes(n) && parseFloat(n.replace(',', '.')) >= 5);
+            if (filtered.length > 0) {
+              credit = parseFloat(filtered[0].replace(',', '.'));
+              debugInfo.patterns.push(`Standalone: ${filtered[0]} → ${credit}`);
+            }
           }
         }
     return {
@@ -166,9 +187,10 @@ exports.handler = async (event, context) => {
           headers,
           body: JSON.stringify({ 
             success: true, 
-      message: isNaN(credit) ? 'Kredit zjištěn, ale nelze přečíst hodnotu (viz rawResult).' : `Dostupný kredit: ${credit}`,
+      message: isNaN(credit) ? 'Kredit zjištěn, ale nelze přečíst hodnotu (viz rawResult).' : `Dostupný kredit: ${credit} Kč`,
             credit: isNaN(credit) ? undefined : credit,
-            rawResult: result
+            rawResult: result,
+            debugInfo
           })
         };
       }
