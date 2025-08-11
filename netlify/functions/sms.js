@@ -54,38 +54,56 @@ exports.handler = async (event, context) => {
     let normalizedNumber = '';
     if (action === 'send_sms') {
       // 1) Striktní normalizace: jen číslice
-      normalizedNumber = (phoneNumber || '')
+      let cleaned = (phoneNumber || '')
         .toString()
         .trim()
         .replace(/[^0-9]/g, ''); // ponech jen čísla
 
+      console.log('Phone normalization step 1 - cleaned:', cleaned);
+
       // 2) Zahodit "00" prefix (např. 00420 -> 420)
-      if (/^00\d+/.test(normalizedNumber)) {
-        normalizedNumber = normalizedNumber.replace(/^00/, '');
+      if (/^00\d+/.test(cleaned)) {
+        cleaned = cleaned.replace(/^00/, '');
+        console.log('Phone normalization step 2 - removed 00:', cleaned);
       }
 
-      // 3) Pokud 9 číslic (CZ mobil), přidej 420
-      if (/^\d{9}$/.test(normalizedNumber)) {
-        normalizedNumber = '420' + normalizedNumber;
+      // 3) Pokud začíná 420, ověř délku
+      if (/^420/.test(cleaned)) {
+        if (cleaned.length === 12) {
+          normalizedNumber = cleaned; // 420xxxxxxxxx je OK
+        } else if (cleaned.length > 12) {
+          // Možná duplicitní 420 - zkus odstranit první
+          normalizedNumber = cleaned.substring(3);
+          console.log('Phone normalization step 3a - removed duplicate 420:', normalizedNumber);
+        } else {
+          normalizedNumber = cleaned; // nech to být, možná je to OK
+        }
+      } else if (/^\d{9}$/.test(cleaned)) {
+        // 4) Pokud 9 číslic (CZ mobil), přidej 420
+        normalizedNumber = '420' + cleaned;
+        console.log('Phone normalization step 4 - added 420:', normalizedNumber);
+      } else {
+        normalizedNumber = cleaned;
       }
 
-      // 4) Pokud začíná 420 a má méně/vice než 12 číslic, je to podezřelé
-      if (/^420/.test(normalizedNumber) && normalizedNumber.length !== 12) {
-        // Např. omylem dvojité 420 atd. Pokus se opravit běžný případ 42000...
-        normalizedNumber = normalizedNumber.replace(/^4200/, '420');
-      }
+      console.log('Final normalized number:', normalizedNumber);
 
-      // 5) Rychlá validace
-      const isLikelyCzMobile = /^420\d{9}$/.test(normalizedNumber);
-      if (!isLikelyCzMobile) {
+      // 5) Rychlá validace - musí být přesně 12 číslic začínajících 420
+      const isValid = /^420\d{9}$/.test(normalizedNumber);
+      if (!isValid) {
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
             success: false,
-            message: 'Neplatné telefonní číslo po normalizaci. Použijte 420xxxxxxxxx (9 číslic po 420).',
+            message: `Neplatné telefonní číslo po normalizaci. Musí být 420xxxxxxxxx (celkem 12 číslic). Aktuální: ${normalizedNumber}`,
             normalizedNumber,
-            debug: { original: phoneNumber, length: normalizedNumber.length }
+            debug: { 
+              original: phoneNumber, 
+              cleaned, 
+              length: normalizedNumber.length,
+              isValid
+            }
           })
         };
       }
