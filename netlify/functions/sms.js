@@ -116,7 +116,8 @@ exports.handler = async (event, context) => {
   const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
   if (senderId) params.append('sender_id', senderId);
   params.append('unicode', '1');
-  // Neposíláme route/type – ponecháme výchozí chování poskytovatele
+  // Pro jistotu specifikujme typ
+  params.append('type', 'sms');
     }
 
     const sendOnce = async (searchParams) => {
@@ -257,6 +258,7 @@ exports.handler = async (event, context) => {
           alt.append('numbers', normalizedNumber);
           alt.append('message', message || '');
           alt.append('unicode', '1');
+          alt.append('type', 'sms');
 
           const altResult = await sendOnce(alt);
       console.log('SMS send - fallback(numbers) result:', altResult);
