@@ -52,30 +52,54 @@ export const EmailTestPanel: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const testOwner = {
-        id: 'test-1',
-        name: 'Test Uživatel',
-        email: testEmail,
-        voting_token: 'test-token-123'
-      };
+      // Pošleme přímo přes serverless funkci, abychom viděli plnou odpověď (providerResponse)
+      const envBase = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.VITE_FUNCTIONS_BASE_URL;
+      const isDev = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.DEV;
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+      const isEnvLocalhost = !!envBase && /^https?:\/\/localhost(?::\d+)?/i.test(envBase);
+      const base = envBase
+        ? (isEnvLocalhost ? (isDev || hostname === 'localhost' ? envBase : '') : envBase)
+        : (isDev ? 'http://localhost:8888' : '');
+      const url = `${base || ''}/.netlify/functions/send-email`;
 
-      const testVoting = {
-        id: 'test-voting-1',
-        title: 'Test hlasování emailu',
-        description: 'Toto je testovací hlasování pro ověření email funkčnosti.',
-        start_date: new Date().toISOString(),
-        end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-      };
+      const subject = `Test email z portálu (${new Date().toLocaleString('cs-CZ')})`;
+      const html = `<p>Toto je testovací zpráva z OnlineHlasování.</p><p>Čas: ${new Date().toISOString()}</p>`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: testEmail, subject, html })
+      });
 
-  const result = await NotificationService.sendVotingNotifications([testOwner], testVoting, 'start');
-      
-  addTestResult(
+      const data = await res.json().catch(() => ({}));
+      const ok = res.ok && data?.success;
+      addTestResult(
         'Custom Email',
-        result.success > 0,
-        result.success > 0 
-          ? `Email úspěšně odeslán na ${testEmail}` 
-          : `Nepodařilo se odeslat email na ${testEmail}`
+        !!ok,
+        ok ? `Email úspěšně odeslán na ${testEmail}` : `Nepodařilo se odeslat email na ${testEmail} (HTTP ${res.status})`
       );
+      if (!ok) {
+        setTestResults(prev => [
+          {
+            type: 'Detail odpovědi',
+            success: false,
+            message: 'Plná odpověď serveru',
+            timestamp: new Date().toLocaleString('cs-CZ'),
+            details: data || { note: 'Bez JSON těla' }
+          },
+          ...prev,
+        ]);
+      } else {
+        setTestResults(prev => [
+          {
+            type: 'Detail odpovědi',
+            success: true,
+            message: `ID zprávy: ${data?.messageId || data?.messageIdNumeric || 'neznámé'}`,
+            timestamp: new Date().toLocaleString('cs-CZ'),
+            details: data
+          },
+          ...prev,
+        ]);
+      }
     } catch (error) {
       addTestResult('Custom Email', false, `Chyba: ${error instanceof Error ? error.message : 'Neznámá chyba'}`);
     } finally {
