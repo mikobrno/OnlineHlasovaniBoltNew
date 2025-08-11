@@ -53,7 +53,7 @@ export class SMSService {
       });
 
   const data = await response.json();
-  console.debug('SMS send response', { url: apiUrl, status: response.status, data });
+  console.log('[SMS] send response', { url: apiUrl, status: response.status, data });
   return data;
     } catch (error) {
       console.error('SMS sending error:', error);
@@ -83,7 +83,7 @@ export class SMSService {
         body: JSON.stringify({ action: 'check_credit' })
       });
   const data = await response.json();
-  console.debug('SMS credit test response', { url: apiUrl, status: response.status, data });
+  console.log('[SMS] credit test response', { url: apiUrl, status: response.status, data });
   return Boolean(data?.success);
   } catch {
       return false;
@@ -107,7 +107,7 @@ export class SMSService {
         body: JSON.stringify({ action: 'check_credit' })
       });
   const result = await response.json();
-  console.debug('SMS get credit response', { url: apiUrl, status: response.status, result });
+  console.log('[SMS] get credit response', { url: apiUrl, status: response.status, result });
   if (result?.success) {
         return {
           success: true,
