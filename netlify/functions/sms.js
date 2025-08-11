@@ -1,3 +1,4 @@
+// Verze: Final Clean 11.8.2025
 // netlify/functions/sms.js - Netlify Function pro SMS API
 // Uses native fetch in Node 18 (no node-fetch required)
 
