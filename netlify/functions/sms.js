@@ -25,7 +25,7 @@ exports.handler = async (event, context) => {
   try {
     let parsed = {};
     try { parsed = JSON.parse(event.body || '{}'); } catch (_) { parsed = {}; }
-    const { action, phoneNumber, message } = parsed;
+  const { action, phoneNumber, message } = parsed;
     
     // Env config: prefer SMSBRANA_* for functions, fallback to VITE_*
     const login = process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || '';
@@ -44,7 +44,7 @@ exports.handler = async (event, context) => {
       };
     }
     
-    const params = new URLSearchParams({
+  const params = new URLSearchParams({
       action: action || 'send_sms',
       login,
       password,
@@ -54,7 +54,9 @@ exports.handler = async (event, context) => {
     if (action === 'send_sms') {
       params.append('number', phoneNumber?.replace(/\s+/g, '').replace(/^\+/, '') || '');
       params.append('message', message || '');
-      params.append('sender_id', 'OnlineSprava');
+      // Optional custom sender (must be approved by provider)
+      const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
+      if (senderId) params.append('sender_id', senderId);
       params.append('unicode', '1');
     }
 
@@ -67,6 +69,24 @@ exports.handler = async (event, context) => {
     });
 
     const result = await response.text();
+
+    // Helper: parse XML error code like <result><err>6</err></result>
+    const parseXmlError = (text) => {
+      try {
+        const m = /<err>(\d+)<\/err>/i.exec(text);
+        if (!m) return null;
+        const code = Number(m[1]);
+        const map = {
+          1: 'Chybí povinný parametr (login, password, number nebo message).',
+          2: 'Neplatné přihlašovací údaje (login).',
+          3: 'Neplatné přihlašovací údaje (password).',
+          4: 'Nedostatečný kredit na účtu.',
+          5: 'Nepovolený nebo neplatný odesílatel (sender_id).',
+          6: 'Neplatné telefonní číslo nebo nepovolený formát. Zkuste 420xxxxxxxxx bez + a mezer.',
+        };
+        return { code, message: map[code] || `Chyba poskytovatele (kód ${code}).` };
+      } catch { return null; }
+    };
     
     if (action === 'check_credit') {
       if (result.includes('ERROR')) {
@@ -107,12 +127,14 @@ exports.handler = async (event, context) => {
           })
         };
       } else {
+        const parsedErr = parseXmlError(result);
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify({ 
             success: false, 
-            message: `Chyba při odesílání SMS: ${result}`,
+            message: parsedErr ? parsedErr.message : `Chyba při odesílání SMS: ${result}`,
+            errorCode: parsedErr?.code,
             rawResult: result
           })
         };
