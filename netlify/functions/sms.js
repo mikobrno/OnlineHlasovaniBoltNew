@@ -235,8 +235,11 @@ exports.handler = async (event, context) => {
       const classifyResult = (txt) => {
         const t = (txt || '').trim();
         const hasError = /ERROR|<err>\s*\d+\s*<\/err>/i.test(t);
-        const okLike = /\bOK\b/i.test(t) || /<result>\s*OK\s*<\/result>/i.test(t) || /queued|accepted/i.test(t);
-        return { ok: okLike && !hasError, hasError, raw: t };
+        const okExplicit = /\bOK\b/i.test(t) || /<result>\s*OK\s*<\/result>/i.test(t) || /queued|accepted/i.test(t);
+        const looksLikeId = /\b(id|smsid|msgid)\b\s*[:=]?\s*\d+/i.test(t) || /<id>\s*\d+\s*<\/id>/i.test(t);
+        const nonEmptyNoError = t.length > 0 && !hasError;
+        const ok = (okExplicit || looksLikeId || nonEmptyNoError) && !hasError;
+        return { ok, hasError, raw: t };
       };
 
       // První výsledek
