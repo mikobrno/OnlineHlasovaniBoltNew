@@ -235,6 +235,22 @@ export const SMSTestView: React.FC = () => {
               {testResult.success ? 'SMS úspěšně odeslána!' : 'Chyba při odesílání SMS!'}
             </p>
             <p className="text-sm mt-1">{testResult.message}</p>
+            {!testResult.success && (
+              <div className="mt-2 space-y-1 text-xs">
+                {typeof testResult.errorCode !== 'undefined' && (
+                  <div>kód chyby: {testResult.errorCode}</div>
+                )}
+                {testResult.normalizedNumber && (
+                  <div>normalizované číslo: {testResult.normalizedNumber}</div>
+                )}
+                {testResult.rawResult && (
+                  <div className="mt-1">
+                    <div className="font-semibold">provider raw:</div>
+                    <code className="block whitespace-pre-wrap break-all">{testResult.rawResult}</code>
+                  </div>
+                )}
+              </div>
+            )}
             {(testResult.details || testResult.rawResult || testResult.normalizedNumber) && (
               <details className="mt-2">
                 <summary className="text-xs cursor-pointer">Technické detaily</summary>
