@@ -31,9 +31,14 @@ export class SMSService {
     }
     try {
       // Použijeme Netlify function místo přímého volání API
-      const apiUrl = import.meta.env.DEV 
-        ? 'http://localhost:8888/.netlify/functions/sms'
-        : '/.netlify/functions/sms';
+      const envBase = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.VITE_FUNCTIONS_BASE_URL;
+      const isDev = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.DEV;
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+      const isEnvLocalhost = !!envBase && /^https?:\/\/localhost(?::\d+)?/i.test(envBase);
+      const base = envBase
+        ? (isEnvLocalhost ? (isDev || hostname === 'localhost' ? envBase : '') : envBase)
+        : (isDev ? 'http://localhost:8888' : '');
+      const apiUrl = `${base || ''}/.netlify/functions/sms`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -62,9 +67,14 @@ export class SMSService {
 
   async testConnection(): Promise<boolean> {
     try {
-      const apiUrl = import.meta.env.DEV 
-        ? 'http://localhost:8888/.netlify/functions/sms'
-        : '/.netlify/functions/sms';
+      const envBase = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.VITE_FUNCTIONS_BASE_URL;
+      const isDev = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.DEV;
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+      const isEnvLocalhost = !!envBase && /^https?:\/\/localhost(?::\d+)?/i.test(envBase);
+      const base = envBase
+        ? (isEnvLocalhost ? (isDev || hostname === 'localhost' ? envBase : '') : envBase)
+        : (isDev ? 'http://localhost:8888' : '');
+      const apiUrl = `${base || ''}/.netlify/functions/sms`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -80,9 +90,14 @@ export class SMSService {
 
   async getCredit(): Promise<{ success: boolean; message: string; credit?: number }> {
     try {
-      const apiUrl = import.meta.env.DEV 
-        ? 'http://localhost:8888/.netlify/functions/sms'
-        : '/.netlify/functions/sms';
+      const envBase = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.VITE_FUNCTIONS_BASE_URL;
+      const isDev = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.DEV;
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+      const isEnvLocalhost = !!envBase && /^https?:\/\/localhost(?::\d+)?/i.test(envBase);
+      const base = envBase
+        ? (isEnvLocalhost ? (isDev || hostname === 'localhost' ? envBase : '') : envBase)
+        : (isDev ? 'http://localhost:8888' : '');
+      const apiUrl = `${base || ''}/.netlify/functions/sms`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',

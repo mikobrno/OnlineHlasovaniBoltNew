@@ -107,8 +107,14 @@ export const EmailTestPanel: React.FC = () => {
   useEffect(() => {
     const loadStatus = async () => {
       try {
-  const base = import.meta.env.VITE_FUNCTIONS_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8888' : '');
-  const url = `${base}/.netlify/functions/send-email`;
+        const envBase = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.VITE_FUNCTIONS_BASE_URL;
+        const isDev = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.DEV;
+        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+        const isEnvLocalhost = !!envBase && /^https?:\/\/localhost(?::\d+)?/i.test(envBase);
+        const base = envBase
+          ? (isEnvLocalhost ? (isDev || hostname === 'localhost' ? envBase : '') : envBase)
+          : (isDev ? 'http://localhost:8888' : '');
+        const url = `${base || ''}/.netlify/functions/send-email`;
         const res = await fetch(url, { method: 'GET' });
         if (res.ok) {
           const data = await res.json();

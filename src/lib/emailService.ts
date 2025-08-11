@@ -37,8 +37,15 @@ interface GmailResponse {
 // Odeslání přes Netlify Function (Mailjet / SMTP fallback podle serveru)
 const sendViaBackendSMTP = async (emailData: EmailData): Promise<GmailResponse> => {
   try {
-  const base = import.meta.env.VITE_FUNCTIONS_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8888' : '');
-  const url = `${base}/.netlify/functions/send-email`;
+    // Determine functions base safely: never use localhost in production
+  const envBase = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.VITE_FUNCTIONS_BASE_URL;
+  const isDev = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.DEV;
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+    const isEnvLocalhost = !!envBase && /^https?:\/\/localhost(?::\d+)?/i.test(envBase);
+    const base = envBase
+      ? (isEnvLocalhost ? (isDev || hostname === 'localhost' ? envBase : '') : envBase)
+      : (isDev ? 'http://localhost:8888' : '');
+    const url = `${base || ''}/.netlify/functions/send-email`;
   const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -292,8 +299,14 @@ export const sendVotingEndEmail = async (owner: OwnerData, voting: VotingData): 
 export const testEmailGmail = async (): Promise<{ success: boolean; message: string }> => {
   // Jednoduchý test dostupnosti backendu (Mailjet)
   try {
-  const base = import.meta.env.VITE_FUNCTIONS_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8888' : '');
-  const url = `${base}/.netlify/functions/send-email`;
+  const envBase = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.VITE_FUNCTIONS_BASE_URL;
+  const isDev = (import.meta as unknown as { env: { VITE_FUNCTIONS_BASE_URL?: string; DEV: boolean } }).env?.DEV;
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+    const isEnvLocalhost = !!envBase && /^https?:\/\/localhost(?::\d+)?/i.test(envBase);
+    const base = envBase
+      ? (isEnvLocalhost ? (isDev || hostname === 'localhost' ? envBase : '') : envBase)
+      : (isDev ? 'http://localhost:8888' : '');
+    const url = `${base || ''}/.netlify/functions/send-email`;
     const ping = await fetch(url, { method: 'GET' });
     if (ping.ok) {
       return { success: true, message: 'Backend e‑mailů je připraven (Mailjet).' };
