@@ -4,6 +4,7 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST,GET,OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
+  'X-Content-Type-Options': 'nosniff',
 };
 
 export const handler = async (event) => {
@@ -65,6 +66,7 @@ export const handler = async (event) => {
   const fromEmail = process.env.MAILJET_FROM_EMAIL || from;
       const fromName = process.env.MAILJET_FROM_NAME || 'Online Hlasování';
 
+      const customId = `olh-${Date.now()}`;
       const payload = {
         Messages: [
           {
@@ -72,6 +74,7 @@ export const handler = async (event) => {
             To: [{ Email: to }],
             Subject: subject,
             HTMLPart: html,
+            CustomID: customId,
           },
         ],
       };
@@ -94,8 +97,37 @@ export const handler = async (event) => {
       const mjStatus = msg?.Status; // 'success' | 'error'
 
       if (res.ok && mjStatus === 'success') {
-        const messageId = msg?.To?.[0]?.MessageUUID || msg?.CustomID || null;
-        const messageIdNumeric = msg?.To?.[0]?.MessageID || null;
+        const messageUuid = msg?.To?.[0]?.MessageUUID || null;
+        // MessageID bývá mimo rozsah bezpečných integerů JS – získáme konzistentní string
+        const rawNumeric = msg?.To?.[0]?.MessageID;
+        const hrefId = typeof msg?.To?.[0]?.MessageHref === 'string'
+          ? (msg.To[0].MessageHref.match(/message\/(\d+)/)?.[1] || null)
+          : null;
+        const messageIdNumeric = typeof rawNumeric === 'string'
+          ? rawNumeric
+          : (typeof rawNumeric === 'number' ? String(rawNumeric) : null);
+        const messageIdResolved = hrefId || messageIdNumeric || null;
+
+        // Po odeslání ověřme existenci zprávy v Mailjetu (pokud máme ID)
+        let messageLookup = null;
+        if (messageIdResolved) {
+          try {
+            const checkUrl = `https://api.mailjet.com/v3/REST/message/${messageIdResolved}`;
+            const checkRes = await fetch(checkUrl, {
+              method: 'GET',
+              headers: { 'Authorization': `Basic ${auth}` },
+            });
+            const checkData = await checkRes.json().catch(() => null);
+            messageLookup = {
+              httpStatus: checkRes.status,
+              found: Array.isArray(checkData?.Data) && checkData.Data.length > 0,
+              data: checkData?.Data?.[0] || checkData || null,
+            };
+          } catch (e) {
+            messageLookup = { error: e?.message || String(e) };
+          }
+        }
+
         return {
           statusCode: 200,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -104,12 +136,14 @@ export const handler = async (event) => {
             provider: 'mailjet',
             status: res.status,
             mailjetStatus: mjStatus,
-            messageId,
-            messageIdNumeric,
+            messageId: messageUuid || customId,
+            messageIdNumeric: messageIdResolved,
             from: { email: fromEmail, name: fromName },
             to,
             subject,
-            providerResponse: msg
+            providerResponse: msg,
+            messageLookup,
+            debug: { customId }
           }),
         };
       }
