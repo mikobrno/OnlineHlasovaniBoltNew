@@ -108,7 +108,8 @@ exports.handler = async (event, context) => {
         };
       }
 
-      params.append('number', normalizedNumber);
+      // Dle požadavku preferujeme formát +420
+      params.append('number', `+${normalizedNumber}`);
       params.append('message', message || '');
       // Odesílatel je klíčový. Posíláme ho vždy, i když je prázdný, aby se použil default.
       const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
