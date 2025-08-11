@@ -6,12 +6,14 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 
+type SMSResultView = { success: boolean; message: string; details?: string; errorCode?: number; rawResult?: string; normalizedNumber?: string };
+
 export const SMSTestView: React.FC = () => {
   const { showToast } = useToast();
   const [testPhone, setTestPhone] = useState('');
   const [testMessage, setTestMessage] = useState('Testovací SMS z OnlineSpráva aplikace. SMS služba funguje správně!');
   const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string; details?: string } | null>(null);
+  const [testResult, setTestResult] = useState<SMSResultView | null>(null);
   const [creditInfo, setCreditInfo] = useState<{ credit?: number; message: string } | null>(null);
   const [isLoadingCredit, setIsLoadingCredit] = useState(false);
 
@@ -25,20 +27,16 @@ export const SMSTestView: React.FC = () => {
     setTestResult(null);
 
     try {
-      const result = await smsService.sendSMS({
-        phoneNumber: testPhone,
-        message: testMessage
-      });
-
-      setTestResult(result);
+  const result = await smsService.sendSMS(testPhone, testMessage);
+  setTestResult(result as unknown as SMSResultView);
       
       if (result.success) {
         showToast('Test SMS byla úspěšně odeslána!', 'success');
       } else {
         showToast(`Chyba při odesílání: ${result.message}`, 'error');
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Neznámá chyba';
       setTestResult({ success: false, message: errorMessage });
       showToast(`Chyba při odesílání: ${errorMessage}`, 'error');
     } finally {
@@ -57,7 +55,7 @@ export const SMSTestView: React.FC = () => {
       } else {
         showToast('Připojení k SMSbrana.cz se nezdařilo', 'error');
       }
-    } catch (error) {
+  } catch {
       showToast('Chyba při testování připojení', 'error');
     } finally {
       setIsTesting(false);
@@ -76,7 +74,7 @@ export const SMSTestView: React.FC = () => {
       } else {
         showToast(`Chyba při zjišťování kreditu: ${creditResult.message}`, 'error');
       }
-    } catch (error) {
+  } catch {
       showToast('Chyba při komunikaci se službou', 'error');
     } finally {
       setIsLoadingCredit(false);
@@ -231,10 +229,21 @@ export const SMSTestView: React.FC = () => {
               {testResult.success ? 'SMS úspěšně odeslána!' : 'Chyba při odesílání SMS!'}
             </p>
             <p className="text-sm mt-1">{testResult.message}</p>
-            {testResult.details && (
+            {(testResult.details || testResult.rawResult || testResult.normalizedNumber) && (
               <details className="mt-2">
                 <summary className="text-xs cursor-pointer">Technické detaily</summary>
-                <code className="text-xs mt-1 block">{testResult.details}</code>
+                {testResult.normalizedNumber && (
+                  <div className="text-xs mt-1">normalizované číslo: {testResult.normalizedNumber}</div>
+                )}
+                {typeof testResult.errorCode !== 'undefined' && (
+                  <div className="text-xs mt-1">kód chyby: {testResult.errorCode}</div>
+                )}
+                {testResult.details && (
+                  <code className="text-xs mt-1 block">{testResult.details}</code>
+                )}
+                {testResult.rawResult && (
+                  <code className="text-xs mt-1 block">{testResult.rawResult}</code>
+                )}
               </details>
             )}
           </div>

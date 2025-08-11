@@ -51,8 +51,14 @@ exports.handler = async (event, context) => {
     });
 
     // Přidáme parametry podle akce
+    let normalizedNumber = '';
     if (action === 'send_sms') {
-      params.append('number', phoneNumber?.replace(/\s+/g, '').replace(/^\+/, '') || '');
+      normalizedNumber = (phoneNumber || '')
+        .toString()
+        .trim()
+        .replace(/\s+/g, '')
+        .replace(/^\+/, '');
+      params.append('number', normalizedNumber || '');
       params.append('message', message || '');
       // Optional custom sender (must be approved by provider)
       const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
@@ -116,13 +122,14 @@ exports.handler = async (event, context) => {
       // send_sms
       if (result.includes('OK')) {
         const smsId = result.split(' ')[1];
-        return {
+    return {
           statusCode: 200,
           headers,
           body: JSON.stringify({ 
             success: true, 
             message: 'SMS byla odeslána', 
             smsId,
+      normalizedNumber,
             rawResult: result
           })
         };
@@ -135,6 +142,7 @@ exports.handler = async (event, context) => {
             success: false, 
             message: parsedErr ? parsedErr.message : `Chyba při odesílání SMS: ${result}`,
             errorCode: parsedErr?.code,
+      normalizedNumber,
             rawResult: result
           })
         };
