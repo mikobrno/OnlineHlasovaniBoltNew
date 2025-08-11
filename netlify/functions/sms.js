@@ -1,5 +1,5 @@
 // netlify/functions/sms.js - Netlify Function pro SMS API
-const fetch = require('node-fetch');
+// Uses native fetch in Node 18 (no node-fetch required)
 
 exports.handler = async (event, context) => {
   // CORS headers
@@ -23,12 +23,31 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const { action, phoneNumber, message } = JSON.parse(event.body);
+    let parsed = {};
+    try { parsed = JSON.parse(event.body || '{}'); } catch (_) { parsed = {}; }
+    const { action, phoneNumber, message } = parsed;
+    
+    // Env config: prefer SMSBRANA_* for functions, fallback to VITE_*
+    const login = process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || '';
+    const password = process.env.SMSBRANA_PASSWORD || process.env.VITE_SMSBRANA_PASSWORD || '';
+    
+    // If not configured, return structured info (avoid 500 to keep console clean)
+    if (!login || !password) {
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ 
+          success: false,
+          message: 'SMS brána není nakonfigurována. Nastavte SMSBRANA_LOGIN a SMSBRANA_PASSWORD (nebo VITE_SMSBRANA_*).',
+          configured: false
+        })
+      };
+    }
     
     const params = new URLSearchParams({
       action: action || 'send_sms',
-      login: process.env.VITE_SMSBRANA_LOGIN,
-      password: process.env.VITE_SMSBRANA_PASSWORD,
+      login,
+      password,
     });
 
     // Přidáme parametry podle akce
@@ -100,13 +119,14 @@ exports.handler = async (event, context) => {
       }
     }
   } catch (error) {
+    // Avoid 500 to prevent noisy console errors; return structured failure
     return {
-      statusCode: 500,
+      statusCode: 200,
       headers,
       body: JSON.stringify({ 
         success: false, 
         message: 'Chyba při odesílání SMS',
-        error: error.message
+        error: error?.message || String(error)
       })
     };
   }
