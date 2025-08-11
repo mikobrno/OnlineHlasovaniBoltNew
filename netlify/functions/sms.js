@@ -232,12 +232,18 @@ exports.handler = async (event, context) => {
       }
     } else {
       // send_sms
-      const okLike = (txt) => /\bOK\b/i.test(txt) || /<result>\s*OK\s*<\/result>/i.test(txt);
+      const classifyResult = (txt) => {
+        const t = (txt || '').trim();
+        const hasError = /ERROR|<err>\s*\d+\s*<\/err>/i.test(t);
+        const okLike = /\bOK\b/i.test(t) || /<result>\s*OK\s*<\/result>/i.test(t) || /queued|accepted/i.test(t);
+        return { ok: okLike && !hasError, hasError, raw: t };
+      };
 
       // První výsledek
       console.log('SMS send - first result:', result);
 
-      if (!okLike(result)) {
+      const firstClass = classifyResult(result);
+      if (!firstClass.ok) {
         // Zkus jednoduchý fallback: parametr "numbers" a bez sender_id/route/type
         const firstErr = parseXmlError(result);
         if (firstErr?.code === 6) {
@@ -250,9 +256,10 @@ exports.handler = async (event, context) => {
           alt.append('unicode', '1');
 
           const altResult = await sendOnce(alt);
-          console.log('SMS send - fallback(numbers) result:', altResult);
+      console.log('SMS send - fallback(numbers) result:', altResult);
 
-          if (okLike(altResult)) {
+      const altClass = classifyResult(altResult);
+      if (altClass.ok) {
             const smsId = (altResult.split(' ')[1] || '').trim();
             return {
               statusCode: 200,
@@ -262,7 +269,8 @@ exports.handler = async (event, context) => {
                 message: 'SMS byla odeslána', 
                 smsId,
                 normalizedNumber,
-                rawResult: altResult
+        rawResult: altResult,
+        providerStatus: 'accepted(fallback)'
               })
             };
           }
@@ -272,7 +280,8 @@ exports.handler = async (event, context) => {
         }
       }
 
-      if (okLike(result)) {
+  const finalClass = classifyResult(result);
+  if (finalClass.ok) {
         const smsId = (result.split(' ')[1] || '').trim();
         return {
           statusCode: 200,
@@ -282,22 +291,24 @@ exports.handler = async (event, context) => {
             message: 'SMS byla odeslána', 
             smsId,
             normalizedNumber,
-            rawResult: result
+    rawResult: result,
+    providerStatus: 'accepted'
           })
         };
       }
 
       // Chyba
-      const parsedErr = parseXmlError(result);
+    const parsedErr = parseXmlError(result);
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({ 
           success: false, 
-          message: parsedErr ? parsedErr.message : `Chyba při odesílání SMS: ${result}`,
+      message: parsedErr ? parsedErr.message : `Chyba při odesílání SMS: ${result || 'prázdná odpověď'}`,
           errorCode: parsedErr?.code,
           normalizedNumber,
           rawResult: result,
+      providerStatus: 'rejected',
           payloadSummary: { length: (message || '').length }
         })
       };
