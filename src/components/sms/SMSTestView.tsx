@@ -6,7 +6,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 
-type SMSResultView = { success: boolean; message: string; details?: string; errorCode?: number; rawResult?: string; normalizedNumber?: string };
+type SMSResultView = { success: boolean; message: string; details?: string; errorCode?: number; rawResult?: string; normalizedNumber?: string; attempts?: Array<{ attempt: number; param: string; errorCode?: number; result?: string }>; };
 
 export const SMSTestView: React.FC = () => {
   const { showToast } = useToast();
@@ -249,6 +249,21 @@ export const SMSTestView: React.FC = () => {
                 )}
                 {testResult.rawResult && (
                   <code className="text-xs mt-1 block">{testResult.rawResult}</code>
+                )}
+                {testResult.attempts && testResult.attempts.length > 0 && (
+                  <div className="text-xs mt-2">
+                    <div className="font-semibold">Attempts:</div>
+                    {testResult.attempts.map((a, idx) => (
+                      <div key={idx} className="mt-1">
+                        #{a.attempt} via param "{a.param}" → errorCode: {a.errorCode ?? 'n/a'}
+                        {a.result && (
+                          <div className="mt-1">
+                            <code className="block">{a.result}</code>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
               </details>
             )}

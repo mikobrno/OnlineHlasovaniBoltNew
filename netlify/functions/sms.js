@@ -53,21 +53,44 @@ exports.handler = async (event, context) => {
     // Přidáme parametry podle akce
     let normalizedNumber = '';
     if (action === 'send_sms') {
+      // 1) Striktní normalizace: jen číslice
       normalizedNumber = (phoneNumber || '')
         .toString()
         .trim()
-        .replace(/\s+/g, '')
-        .replace(/^\+/, '')
-        .replace(/^00/, '');
-      // Pokud je to 9 číslic (CZ mobil), přidej 420 prefix
+        .replace(/[^0-9]/g, ''); // ponech jen čísla
+
+      // 2) Zahodit "00" prefix (např. 00420 -> 420)
+      if (/^00\d+/.test(normalizedNumber)) {
+        normalizedNumber = normalizedNumber.replace(/^00/, '');
+      }
+
+      // 3) Pokud 9 číslic (CZ mobil), přidej 420
       if (/^\d{9}$/.test(normalizedNumber)) {
         normalizedNumber = '420' + normalizedNumber;
       }
-      // Normalizuj 00420... na 420...
-      if (/^00420/.test(normalizedNumber)) {
-        normalizedNumber = normalizedNumber.replace(/^00/, '');
+
+      // 4) Pokud začíná 420 a má méně/vice než 12 číslic, je to podezřelé
+      if (/^420/.test(normalizedNumber) && normalizedNumber.length !== 12) {
+        // Např. omylem dvojité 420 atd. Pokus se opravit běžný případ 42000...
+        normalizedNumber = normalizedNumber.replace(/^4200/, '420');
       }
-      params.append('number', normalizedNumber || '');
+
+      // 5) Rychlá validace
+      const isLikelyCzMobile = /^420\d{9}$/.test(normalizedNumber);
+      if (!isLikelyCzMobile) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            message: 'Neplatné telefonní číslo po normalizaci. Použijte 420xxxxxxxxx (9 číslic po 420).',
+            normalizedNumber,
+            debug: { original: phoneNumber, length: normalizedNumber.length }
+          })
+        };
+      }
+
+      params.append('number', normalizedNumber);
       params.append('message', message || '');
       // Optional custom sender (must be approved by provider)
       const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
@@ -75,15 +98,18 @@ exports.handler = async (event, context) => {
       params.append('unicode', '1');
     }
 
-    const response = await fetch('https://api.smsbrana.cz/smsconnect/http.php', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params
-    });
+    const sendOnce = async (searchParams) => {
+      const response = await fetch('https://api.smsbrana.cz/smsconnect/http.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: searchParams
+      });
+      return response.text();
+    };
 
-    const result = await response.text();
+    let result = await sendOnce(params);
 
     // Helper: parse XML error code like <result><err>6</err></result>
     const parseXmlError = (text) => {
@@ -148,33 +174,88 @@ exports.handler = async (event, context) => {
       }
     } else {
       // send_sms
-      if (result.includes('OK')) {
-        const smsId = result.split(' ')[1];
-    return {
+      const attempts = [];
+      const okLike = (txt) => /\bOK\b/i.test(txt) || /<result>\s*OK\s*<\/result>/i.test(txt);
+
+      if (okLike(result)) {
+        const smsId = (result.split(' ')[1] || '').trim();
+        return {
           statusCode: 200,
           headers,
           body: JSON.stringify({ 
             success: true, 
             message: 'SMS byla odeslána', 
             smsId,
-      normalizedNumber,
-            rawResult: result
-          })
-        };
-      } else {
-        const parsedErr = parseXmlError(result);
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ 
-            success: false, 
-            message: parsedErr ? parsedErr.message : `Chyba při odesílání SMS: ${result}`,
-            errorCode: parsedErr?.code,
-      normalizedNumber,
+            normalizedNumber,
             rawResult: result
           })
         };
       }
+
+      // První pokus selhal – zkusit diagnostiku a případný fallback
+      let parsedErr = parseXmlError(result);
+      attempts.push({ attempt: 1, param: 'number', result, errorCode: parsedErr?.code });
+
+      if (parsedErr?.code === 6) {
+        // Fallback: některé integrace vyžadují parametr "numbers"
+        const alt = new URLSearchParams();
+        alt.append('action', 'send_sms');
+        alt.append('login', (process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || ''));
+        alt.append('password', (process.env.SMSBRANA_PASSWORD || process.env.VITE_SMSBRANA_PASSWORD || ''));
+        alt.append('numbers', normalizedNumber); // změna zde
+        alt.append('message', message || '');
+        const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
+        if (senderId) alt.append('sender_id', senderId);
+        alt.append('unicode', '1');
+
+        const altResult = await sendOnce(alt);
+        if (okLike(altResult)) {
+          const smsId = (altResult.split(' ')[1] || '').trim();
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({ 
+              success: true, 
+              message: 'SMS byla odeslána', 
+              smsId,
+              normalizedNumber,
+              rawResult: altResult,
+              attempts
+            })
+          };
+        }
+        const altErr = parseXmlError(altResult);
+        attempts.push({ attempt: 2, param: 'numbers', result: altResult, errorCode: altErr?.code });
+        // Navrať detailní chybu po fallbacku
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            success: false,
+            message: (altErr ? altErr.message : `Chyba při odesílání SMS: ${altResult}`),
+            errorCode: altErr?.code,
+            normalizedNumber,
+            rawResult: altResult,
+            attempts,
+            payloadSummary: { length: (message || '').length }
+          })
+        };
+      }
+
+      // Nejedná se o err=6 – vrať první chybu
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ 
+          success: false, 
+          message: parsedErr ? parsedErr.message : `Chyba při odesílání SMS: ${result}`,
+          errorCode: parsedErr?.code,
+          normalizedNumber,
+          rawResult: result,
+          attempts,
+          payloadSummary: { length: (message || '').length }
+        })
+      };
     }
   } catch (error) {
     // Avoid 500 to prevent noisy console errors; return structured failure
