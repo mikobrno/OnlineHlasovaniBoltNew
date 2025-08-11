@@ -14,7 +14,7 @@ export const SMSTestView: React.FC = () => {
   const [testMessage, setTestMessage] = useState('Testovací SMS z OnlineSpráva aplikace. SMS služba funguje správně!');
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<SMSResultView | null>(null);
-  const [creditInfo, setCreditInfo] = useState<{ credit?: number; message: string } | null>(null);
+  const [creditInfo, setCreditInfo] = useState<{ credit?: number; message: string; rawResult?: string } | null>(null);
   const [isLoadingCredit, setIsLoadingCredit] = useState(false);
 
   const handleTestSMS = async () => {
@@ -154,6 +154,12 @@ export const SMSTestView: React.FC = () => {
                   {creditInfo.credit !== undefined ? '💰 Kredit dostupný' : '❌ Chyba kreditu'}
                 </p>
                 <p className="text-sm mt-1">{creditInfo.message}</p>
+                {creditInfo.rawResult && (
+                  <details className="mt-2">
+                    <summary className="text-xs cursor-pointer">Detaily odpovědi</summary>
+                    <code className="text-xs mt-1 block">{creditInfo.rawResult}</code>
+                  </details>
+                )}
               </div>
             )}
           </div>

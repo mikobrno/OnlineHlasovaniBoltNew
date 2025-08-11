@@ -57,7 +57,16 @@ exports.handler = async (event, context) => {
         .toString()
         .trim()
         .replace(/\s+/g, '')
-        .replace(/^\+/, '');
+        .replace(/^\+/, '')
+        .replace(/^00/, '');
+      // Pokud je to 9 číslic (CZ mobil), přidej 420 prefix
+      if (/^\d{9}$/.test(normalizedNumber)) {
+        normalizedNumber = '420' + normalizedNumber;
+      }
+      // Normalizuj 00420... na 420...
+      if (/^00420/.test(normalizedNumber)) {
+        normalizedNumber = normalizedNumber.replace(/^00/, '');
+      }
       params.append('number', normalizedNumber || '');
       params.append('message', message || '');
       // Optional custom sender (must be approved by provider)
@@ -106,14 +115,25 @@ exports.handler = async (event, context) => {
           })
         };
       } else {
-        const credit = parseFloat(result.replace('CREDIT ', ''));
+        // Vyparsuj číslo z odpovědi (podpora "CREDIT 123", "CREDIT: 123", příp. XML)
+        let credit = NaN;
+        // 1) Text s číslem
+        const numMatch = (result.match(/(-?\d+[\.,]?\d*)/) || [])[1];
+        if (numMatch) {
+          credit = parseFloat(numMatch.replace(',', '.'));
+        }
+        // 2) XML <credit>123</credit>
+        const xmlMatch = (result.match(/<credit>([^<]+)<\/credit>/i) || [])[1];
+        if (isNaN(credit) && xmlMatch) {
+          credit = parseFloat(xmlMatch.replace(',', '.'));
+        }
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify({ 
             success: true, 
-            message: `Dostupný kredit: ${credit} Kč`,
-            credit: credit,
+            message: isNaN(credit) ? 'Kredit zjištěn, ale nelze přečíst hodnotu (viz rawResult).' : `Dostupný kredit: ${credit} Kč`,
+            credit: isNaN(credit) ? undefined : credit,
             rawResult: result
           })
         };
