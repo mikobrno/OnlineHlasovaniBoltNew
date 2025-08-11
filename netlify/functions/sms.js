@@ -115,24 +115,32 @@ exports.handler = async (event, context) => {
           })
         };
       } else {
-        // Vyparsuj číslo z odpovědi (podpora "CREDIT 123", "CREDIT: 123", příp. XML)
+        // Vyparsuj číslo z odpovědi (preferuj XML <credit> a "credit" vzory)
         let credit = NaN;
-        // 1) Text s číslem
-        const numMatch = (result.match(/(-?\d+[\.,]?\d*)/) || [])[1];
-        if (numMatch) {
-          credit = parseFloat(numMatch.replace(',', '.'));
-        }
-        // 2) XML <credit>123</credit>
-        const xmlMatch = (result.match(/<credit>([^<]+)<\/credit>/i) || [])[1];
-        if (isNaN(credit) && xmlMatch) {
+        // 1) XML <credit>123</credit>
+        const xmlMatch = (result.match(/<credit>\s*([0-9]+(?:[.,][0-9]+)?)\s*<\/credit>/i) || [])[1];
+        if (xmlMatch) {
           credit = parseFloat(xmlMatch.replace(',', '.'));
         }
-        return {
+        // 2) Text "credit ..."
+        if (isNaN(credit)) {
+          const credMatch = (result.match(/credit[^0-9-]*(-?\d+(?:[.,]\d+)?)/i) || [])[1];
+          if (credMatch) credit = parseFloat(credMatch.replace(',', '.'));
+        }
+        // 3) Poslední číslo v řetězci (vyhne se XML verzi 1.0)
+        if (isNaN(credit)) {
+          const allNums = result.match(/-?\d+(?:[.,]\d+)?/g);
+          if (allNums && allNums.length) {
+            const last = allNums[allNums.length - 1];
+            credit = parseFloat(last.replace(',', '.'));
+          }
+        }
+    return {
           statusCode: 200,
           headers,
           body: JSON.stringify({ 
             success: true, 
-            message: isNaN(credit) ? 'Kredit zjištěn, ale nelze přečíst hodnotu (viz rawResult).' : `Dostupný kredit: ${credit} Kč`,
+      message: isNaN(credit) ? 'Kredit zjištěn, ale nelze přečíst hodnotu (viz rawResult).' : `Dostupný kredit: ${credit}`,
             credit: isNaN(credit) ? undefined : credit,
             rawResult: result
           })
