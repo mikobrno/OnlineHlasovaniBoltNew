@@ -89,9 +89,11 @@ export const handler = async (event) => {
       let data = null;
       try { data = await res.json(); } catch (e) { /* ignore parse errors */ }
 
-      if (res.ok) {
-        // Mailjet returns Messages array with Status and To Sent/MessageUUID
-        const msg = data?.Messages?.[0];
+      // Mailjet vrací vždy HTTP 200, skutečný stav je v Messages[0].Status
+      const msg = data?.Messages?.[0];
+      const mjStatus = msg?.Status; // 'success' | 'error'
+
+      if (res.ok && mjStatus === 'success') {
         const messageId = msg?.To?.[0]?.MessageUUID || msg?.CustomID || null;
         const messageIdNumeric = msg?.To?.[0]?.MessageID || null;
         return {
@@ -101,6 +103,7 @@ export const handler = async (event) => {
             success: true, 
             provider: 'mailjet',
             status: res.status,
+            mailjetStatus: mjStatus,
             messageId,
             messageIdNumeric,
             from: { email: fromEmail, name: fromName },
@@ -111,14 +114,17 @@ export const handler = async (event) => {
         };
       }
 
+      // Shromáždíme detaily chyb (často v poli Errors)
+      const errors = msg?.Errors || data?.Errors || data?.ErrorMessage || data;
       return {
         statusCode: res.status || 500,
-        headers: corsHeaders,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
         body: JSON.stringify({ 
           success: false, 
           provider: 'mailjet',
           status: res.status || 500,
-          error: data?.Message || 'Mailjet API error',
+          mailjetStatus: mjStatus || 'error',
+          error: Array.isArray(errors) ? errors.map(e => e?.ErrorMessage || e?.Message || String(e)).join('; ') : (errors?.Message || errors?.ErrorMessage || 'Mailjet API error'),
           providerResponse: data
         }),
       };
