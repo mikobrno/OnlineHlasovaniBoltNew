@@ -108,15 +108,15 @@ exports.handler = async (event, context) => {
         };
       }
 
-      // Dle požadavku preferujeme formát +420
-      params.append('number', `+${normalizedNumber}`);
+      // Dle dokumentace posíláme formát 420... (bez +)
+      params.append('number', normalizedNumber);
       params.append('message', message || '');
       // Odesílatel je klíčový. Posíláme ho vždy, i když je prázdný, aby se použil default.
       const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
       params.append('sender_id', senderId);
       params.append('unicode', '1');
       // Přidáme standardní parametry pro SMSbrana
-      params.append('route', 'economy'); // Změna na economy
+      params.append('route', 'economy');
       params.append('type', 'sms');
     }
 
@@ -141,7 +141,7 @@ exports.handler = async (event, context) => {
       return result;
     };
 
-    let result = await sendOnce(params);
+    const result = await sendOnce(params);
 
     // Helper: parse XML error code like <result><err>6</err></result>
     const parseXmlError = (text) => {
@@ -233,14 +233,13 @@ exports.handler = async (event, context) => {
       }
     } else {
       // send_sms
-      const attempts = [];
       const okLike = (txt) => /\bOK\b/i.test(txt) || /<result>\s*OK\s*<\/result>/i.test(txt);
 
-      console.log('SMS send - first attempt result:', result);
+      console.log('SMS send - final attempt result:', result);
 
       if (okLike(result)) {
         const smsId = (result.split(' ')[1] || '').trim();
-        return {
+    return {
           statusCode: 200,
           headers,
           body: JSON.stringify({ 
@@ -253,81 +252,8 @@ exports.handler = async (event, context) => {
         };
       }
 
-      // První pokus selhal – zkusit diagnostiku a případný fallback
-      let parsedErr = parseXmlError(result);
-      attempts.push({ attempt: 1, param: 'number', result, errorCode: parsedErr?.code });
-
-      if (parsedErr?.code === 6) {
-        // Fallback strategie: vyzkoušíme různé formáty a parametry
-        const formats = [
-          { label: '420', value: normalizedNumber },
-          { label: '+420', value: `+${normalizedNumber}` },
-          { label: '00420', value: `00${normalizedNumber}` },
-        ];
-        const paramsToTry = ['numbers', 'number']; // některá prostředí vyžadují "numbers"
-
-        // Vynech první, co jsme už zkusili (number + 420...)
-        const candidates = [];
-        for (const p of paramsToTry) {
-          for (const f of formats) {
-            const skip = (p === 'number' && f.value === normalizedNumber); // první pokus už proběhl
-            if (skip) continue;
-            candidates.push({ param: p, formatted: f.value, label: f.label });
-          }
-        }
-
-        for (let i = 0; i < candidates.length; i++) {
-          const c = candidates[i];
-          const alt = new URLSearchParams();
-          alt.append('action', 'send_sms');
-          alt.append('login', (process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || ''));
-          alt.append('password', (process.env.SMSBRANA_PASSWORD || process.env.VITE_SMSBRANA_PASSWORD || ''));
-          alt.append(c.param, c.formatted);
-          alt.append('message', message || '');
-          const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
-          alt.append('sender_id', senderId);
-          alt.append('unicode', '1');
-          alt.append('route', 'economy'); // Změna na economy
-          alt.append('type', 'sms');
-
-          const altResult = await sendOnce(alt);
-          const altErr = parseXmlError(altResult);
-          attempts.push({ attempt: attempts.length + 1, param: `${c.param}:${c.label}`, result: altResult, errorCode: altErr?.code });
-
-          if (okLike(altResult)) {
-            const smsId = (altResult.split(' ')[1] || '').trim();
-            return {
-              statusCode: 200,
-              headers,
-              body: JSON.stringify({ 
-                success: true, 
-                message: 'SMS byla odeslána', 
-                smsId,
-                normalizedNumber: c.formatted,
-                rawResult: altResult,
-                attempts
-              })
-            };
-          }
-        }
-
-        // Po všech pokusech pořád neúspěch
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            success: false,
-            message: 'Neplatné telefonní číslo nebo nepovolený formát podle poskytovatele. Zkuste jiný formát nebo kontaktujte podporu.',
-            errorCode: 6,
-            normalizedNumber,
-            rawResult: result,
-            attempts,
-            payloadSummary: { length: (message || '').length }
-          })
-        };
-      }
-
-      // Nejedná se o err=6 – vrať první chybu
+      // Chyba
+      const parsedErr = parseXmlError(result);
       return {
         statusCode: 200,
         headers,
@@ -337,7 +263,6 @@ exports.handler = async (event, context) => {
           errorCode: parsedErr?.code,
           normalizedNumber,
           rawResult: result,
-          attempts,
           payloadSummary: { length: (message || '').length }
         })
       };
