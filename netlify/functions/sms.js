@@ -106,7 +106,17 @@ exports.handler = async (event, context) => {
         },
         body: searchParams
       });
-      return response.text();
+      const result = await response.text();
+      
+      // Debug logging do konzole
+      console.log('SMSbrana request:', {
+        url: 'https://api.smsbrana.cz/smsconnect/http.php',
+        params: Object.fromEntries(searchParams.entries()),
+        response: result,
+        httpStatus: response.status
+      });
+      
+      return result;
     };
 
     let result = await sendOnce(params);
@@ -130,6 +140,8 @@ exports.handler = async (event, context) => {
     };
     
     if (action === 'check_credit') {
+      console.log('Credit check - raw result:', result);
+      
       if (result.includes('ERROR')) {
         return {
           statusCode: 200,
@@ -182,6 +194,9 @@ exports.handler = async (event, context) => {
             }
           }
         }
+        
+        console.log('Credit parsing result:', { credit, debugInfo, rawResult: result });
+        
     return {
           statusCode: 200,
           headers,
@@ -198,6 +213,8 @@ exports.handler = async (event, context) => {
       // send_sms
       const attempts = [];
       const okLike = (txt) => /\bOK\b/i.test(txt) || /<result>\s*OK\s*<\/result>/i.test(txt);
+
+      console.log('SMS send - first attempt result:', result);
 
       if (okLike(result)) {
         const smsId = (result.split(' ')[1] || '').trim();
