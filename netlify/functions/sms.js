@@ -197,45 +197,67 @@ exports.handler = async (event, context) => {
       attempts.push({ attempt: 1, param: 'number', result, errorCode: parsedErr?.code });
 
       if (parsedErr?.code === 6) {
-        // Fallback: některé integrace vyžadují parametr "numbers"
-        const alt = new URLSearchParams();
-        alt.append('action', 'send_sms');
-        alt.append('login', (process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || ''));
-        alt.append('password', (process.env.SMSBRANA_PASSWORD || process.env.VITE_SMSBRANA_PASSWORD || ''));
-        alt.append('numbers', normalizedNumber); // změna zde
-        alt.append('message', message || '');
-        const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
-        if (senderId) alt.append('sender_id', senderId);
-        alt.append('unicode', '1');
+        // Fallback strategie: vyzkoušíme různé formáty a parametry
+        const formats = [
+          { label: '420', value: normalizedNumber },
+          { label: '+420', value: `+${normalizedNumber}` },
+          { label: '00420', value: `00${normalizedNumber}` },
+        ];
+        const paramsToTry = ['numbers', 'number']; // některá prostředí vyžadují "numbers"
 
-        const altResult = await sendOnce(alt);
-        if (okLike(altResult)) {
-          const smsId = (altResult.split(' ')[1] || '').trim();
-          return {
-            statusCode: 200,
-            headers,
-            body: JSON.stringify({ 
-              success: true, 
-              message: 'SMS byla odeslána', 
-              smsId,
-              normalizedNumber,
-              rawResult: altResult,
-              attempts
-            })
-          };
+        // Vynech první, co jsme už zkusili (number + 420...)
+        const candidates = [];
+        for (const p of paramsToTry) {
+          for (const f of formats) {
+            const skip = (p === 'number' && f.value === normalizedNumber); // první pokus už proběhl
+            if (skip) continue;
+            candidates.push({ param: p, formatted: f.value, label: f.label });
+          }
         }
-        const altErr = parseXmlError(altResult);
-        attempts.push({ attempt: 2, param: 'numbers', result: altResult, errorCode: altErr?.code });
-        // Navrať detailní chybu po fallbacku
+
+        for (let i = 0; i < candidates.length; i++) {
+          const c = candidates[i];
+          const alt = new URLSearchParams();
+          alt.append('action', 'send_sms');
+          alt.append('login', (process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || ''));
+          alt.append('password', (process.env.SMSBRANA_PASSWORD || process.env.VITE_SMSBRANA_PASSWORD || ''));
+          alt.append(c.param, c.formatted);
+          alt.append('message', message || '');
+          const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
+          if (senderId) alt.append('sender_id', senderId);
+          alt.append('unicode', '1');
+
+          const altResult = await sendOnce(alt);
+          const altErr = parseXmlError(altResult);
+          attempts.push({ attempt: attempts.length + 1, param: `${c.param}:${c.label}`, result: altResult, errorCode: altErr?.code });
+
+          if (okLike(altResult)) {
+            const smsId = (altResult.split(' ')[1] || '').trim();
+            return {
+              statusCode: 200,
+              headers,
+              body: JSON.stringify({ 
+                success: true, 
+                message: 'SMS byla odeslána', 
+                smsId,
+                normalizedNumber: c.formatted,
+                rawResult: altResult,
+                attempts
+              })
+            };
+          }
+        }
+
+        // Po všech pokusech pořád neúspěch
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify({
             success: false,
-            message: (altErr ? altErr.message : `Chyba při odesílání SMS: ${altResult}`),
-            errorCode: altErr?.code,
+            message: 'Neplatné telefonní číslo nebo nepovolený formát podle poskytovatele. Zkuste jiný formát nebo kontaktujte podporu.',
+            errorCode: 6,
             normalizedNumber,
-            rawResult: altResult,
+            rawResult: result,
             attempts,
             payloadSummary: { length: (message || '').length }
           })
