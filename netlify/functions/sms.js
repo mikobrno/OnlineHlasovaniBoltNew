@@ -115,7 +115,7 @@ exports.handler = async (event, context) => {
       if (senderId) params.append('sender_id', senderId);
       params.append('unicode', '1');
       // Přidáme standardní parametry pro SMSbrana
-      params.append('route', 'premium'); // nebo 'economy'
+      params.append('route', 'economy'); // Změna na economy
       params.append('type', 'sms');
     }
 
@@ -286,7 +286,7 @@ exports.handler = async (event, context) => {
           const senderId = process.env.SMSBRANA_SENDER_ID || process.env.VITE_SMSBRANA_SENDER_ID || '';
           if (senderId) alt.append('sender_id', senderId);
           alt.append('unicode', '1');
-          alt.append('route', 'premium');
+          alt.append('route', 'economy'); // Změna na economy
           alt.append('type', 'sms');
 
           const altResult = await sendOnce(alt);
