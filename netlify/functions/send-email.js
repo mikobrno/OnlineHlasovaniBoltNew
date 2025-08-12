@@ -1,4 +1,5 @@
 // Posíláme výhradně přes Mailjet – žádný SMTP fallback
+import fs from 'fs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -6,6 +7,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type',
   'X-Content-Type-Options': 'nosniff',
 };
+
+function json(statusCode, body) {
+  return {
+    statusCode,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    body: JSON.stringify(body),
+  };
+}
+
+function isWindowsEnv() {
+  const osEnv = process.env.OS || '';
+  return process.platform === 'win32' || osEnv.toLowerCase().includes('windows');
+}
+
+function requireKeys(obj, keys) {
+  // Pouze kontrola přítomnosti klíče (nevyžadujeme neprázdné hodnoty, kvůli kompatibilitě)
+  const missing = keys.filter((k) => !(k in obj));
+  return { ok: missing.length === 0, missing };
+}
 
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -54,157 +74,162 @@ export const handler = async (event) => {
         }
       } catch { /* ignore diag errors */ }
     }
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      body: JSON.stringify({ 
-        success: true,
-        provider: 'mailjet',
-        configured,
-        fromEmail,
-        fromName,
-        missing,
-        accountInfo,
-        message: configured ? 'Email function ready (Mailjet)' : 'Mailjet is not fully configured'
-      }),
-    };
+    return json(200, {
+      success: true,
+      provider: 'mailjet',
+      configured,
+      fromEmail,
+      fromName,
+      missing,
+      accountInfo,
+      message: configured ? 'Email function ready (Mailjet)' : 'Mailjet is not fully configured',
+    });
   }
 
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers: corsHeaders,
-      body: JSON.stringify({ success: false, error: 'Method Not Allowed' }),
-    };
+    return json(405, { success: false, error: 'Method Not Allowed' });
   }
 
   try {
-    const { to, subject, html, from } = JSON.parse(event.body || '{}');
+    const raw = JSON.parse(event.body || '{}');
 
-    if (!to || !subject || !html) {
-      return {
-        statusCode: 400,
-        headers: corsHeaders,
-        body: JSON.stringify({ success: false, error: 'Missing required fields: to, subject, html' }),
+    // Backward kompatibilita: podpora starého tvaru { to, subject, html, from }
+    let params = raw;
+    const looksLikeOldShape = !!raw?.to && !!raw?.subject && !!raw?.html;
+    if (looksLikeOldShape) {
+      params = {
+        fromEmail: raw.from || process.env.MAILJET_FROM_EMAIL,
+        fromName: process.env.MAILJET_FROM_NAME || 'Online Hlasování',
+        toEmail: raw.to,
+        toName: raw.toName || '',
+        ccEmail: raw.ccEmail || undefined,
+        subject: raw.subject,
+        htmlBody: raw.html,
+        attachments: raw.attachments,
       };
     }
 
-  // Mailjet je povinný provider
-  const mjKey = process.env.MAILJET_API_KEY;
-  const mjSecret = process.env.MAILJET_API_SECRET;
-  if (mjKey && mjSecret) {
-  const fromEmail = process.env.MAILJET_FROM_EMAIL || from;
-      const fromName = process.env.MAILJET_FROM_NAME || 'Online Hlasování';
+    // Vyžadované klíče (ccEmail je volitelný v produkci)
+    const requiredKeys = ['fromEmail', 'fromName', 'toEmail', 'toName', 'subject', 'htmlBody'];
+    const { ok, missing } = requireKeys(params, requiredKeys);
+    if (!ok) {
+      return json(400, { success: false, error: `Chybí povinné parametry: ${missing.join(', ')}` });
+    }
 
-      const customId = `olh-${Date.now()}`;
-      const payload = {
-        Messages: [
-          {
-            From: { Email: fromEmail, Name: fromName },
-            To: [{ Email: to }],
-            Subject: subject,
-            HTMLPart: html,
-            CustomID: customId,
-          },
-        ],
-      };
+    // Konfigurace Mailjetu
+    const mjKey = process.env.MAILJET_API_KEY;
+    const mjSecret = process.env.MAILJET_API_SECRET;
+    if (!mjKey || !mjSecret) {
+      return json(500, { success: false, error: 'Mailjet není nakonfigurován. Nastavte MAILJET_API_KEY a MAILJET_API_SECRET.' });
+    }
 
-      const auth = Buffer.from(`${mjKey}:${mjSecret}`).toString('base64');
-      const res = await fetch('https://api.mailjet.com/v3.1/send', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json',
+    // Převzetí parametrů
+    let { fromEmail, fromName } = params;
+    let { toEmail, toName } = params;
+    const { ccEmail, subject, htmlBody } = params;
+    // Fallbacky pro produkci
+    fromEmail = fromEmail || process.env.MAILJET_FROM_EMAIL;
+    fromName = fromName || process.env.MAILJET_FROM_NAME || 'Online Hlasování';
+    if (!toName || toName === '') {
+      try { toName = String(toEmail).split('@')[0]; } catch { toName = 'Recipient'; }
+    }
+    const attachments = Array.isArray(params.attachments) ? params.attachments : [];
+
+    // V prostředí Windows přesměrujeme na debug adresu
+    if (isWindowsEnv()) {
+      const debugEmail = process.env.DEBUG_EMAIL || 'debug-onlinesprava@vahalik.cz';
+      toEmail = debugEmail;
+      toName = toName || 'Debug';
+    }
+
+    // Sestavení Mailjet payloadu
+    const toArray = Array.isArray(toEmail)
+      ? toEmail.map((e) => ({ Email: e, Name: toName }))
+      : [{ Email: toEmail, Name: toName }];
+
+    const payload = {
+      Messages: [
+        {
+          From: { Email: fromEmail, Name: fromName },
+          To: toArray,
+          Subject: subject,
+          HTMLPart: htmlBody,
         },
-        body: JSON.stringify(payload),
-      });
+      ],
+    };
 
-      let data = null;
-      try { data = await res.json(); } catch (e) { /* ignore parse errors */ }
-
-      // Mailjet vrací vždy HTTP 200, skutečný stav je v Messages[0].Status
-      const msg = data?.Messages?.[0];
-      const mjStatus = msg?.Status; // 'success' | 'error'
-
-      if (res.ok && mjStatus === 'success') {
-        const messageUuid = msg?.To?.[0]?.MessageUUID || null;
-        // MessageID bývá mimo rozsah bezpečných integerů JS – získáme konzistentní string
-        const rawNumeric = msg?.To?.[0]?.MessageID;
-        const hrefId = typeof msg?.To?.[0]?.MessageHref === 'string'
-          ? (msg.To[0].MessageHref.match(/message\/(\d+)/)?.[1] || null)
-          : null;
-        const messageIdNumeric = typeof rawNumeric === 'string'
-          ? rawNumeric
-          : (typeof rawNumeric === 'number' ? String(rawNumeric) : null);
-        const messageIdResolved = hrefId || messageIdNumeric || null;
-
-        // Po odeslání ověřme existenci zprávy v Mailjetu (pokud máme ID)
-        let messageLookup = null;
-        if (messageIdResolved) {
-          try {
-            const checkUrl = `https://api.mailjet.com/v3/REST/message/${messageIdResolved}`;
-            const checkRes = await fetch(checkUrl, {
-              method: 'GET',
-              headers: { 'Authorization': `Basic ${auth}` },
-            });
-            const checkData = await checkRes.json().catch(() => null);
-            messageLookup = {
-              httpStatus: checkRes.status,
-              found: Array.isArray(checkData?.Data) && checkData.Data.length > 0,
-              data: checkData?.Data?.[0] || checkData || null,
-            };
-          } catch (e) {
-            messageLookup = { error: e?.message || String(e) };
-          }
-        }
-
-        return {
-          statusCode: 200,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          body: JSON.stringify({ 
-            success: true, 
-            provider: 'mailjet',
-            status: res.status,
-            mailjetStatus: mjStatus,
-            messageId: messageUuid || customId,
-            messageIdNumeric: messageIdResolved,
-            from: { email: fromEmail, name: fromName },
-            to,
-            subject,
-            providerResponse: msg,
-            messageLookup,
-            debug: { customId }
-          }),
-        };
-      }
-
-      // Shromáždíme detaily chyb (často v poli Errors)
-      const errors = msg?.Errors || data?.Errors || data?.ErrorMessage || data;
-      return {
-        statusCode: res.status || 500,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        body: JSON.stringify({ 
-          success: false, 
-          provider: 'mailjet',
-          status: res.status || 500,
-          mailjetStatus: mjStatus || 'error',
-          error: Array.isArray(errors) ? errors.map(e => e?.ErrorMessage || e?.Message || String(e)).join('; ') : (errors?.Message || errors?.ErrorMessage || 'Mailjet API error'),
-          providerResponse: data
-        }),
-      };
+    if (ccEmail) {
+      const ccArray = Array.isArray(ccEmail) ? ccEmail : [ccEmail];
+      payload.Messages[0].CC = ccArray.filter(Boolean).map((e) => ({ Email: e }));
     }
 
-    // Pokud Mailjet není nakonfigurován, vrať jasnou chybu
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ success: false, error: 'Mailjet není nakonfigurován. Nastavte MAILJET_API_KEY, MAILJET_API_SECRET, MAILJET_FROM_EMAIL a MAILJET_FROM_NAME.' }),
-    };
+    // Zpracování příloh dle PHP (attachment_name, attachment_path, attachment_type)
+    if (attachments.length > 0) {
+      payload.Messages[0].Attachments = [];
+      for (const att of attachments) {
+        try {
+          const name = att.attachment_name || att.filename || 'attachment';
+          const type = att.attachment_type || att.content_type || 'application/octet-stream';
+          let base64Content = att.base64 || att.Base64Content;
+          const filePath = att.attachment_path || att.path;
+          if (!base64Content && filePath && fs.existsSync(filePath)) {
+            const buf = fs.readFileSync(filePath);
+            base64Content = buf.toString('base64');
+          }
+          if (base64Content) {
+            payload.Messages[0].Attachments.push({
+              ContentType: type,
+              Filename: name,
+              Base64Content: base64Content,
+            });
+          }
+        } catch {
+          // ignorujeme neplatné přílohy
+        }
+      }
+      if (payload.Messages[0].Attachments.length === 0) {
+        delete payload.Messages[0].Attachments;
+      }
+    }
+
+    const auth = Buffer.from(`${mjKey}:${mjSecret}`).toString('base64');
+    const res = await fetch('https://api.mailjet.com/v3.1/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    let data = null;
+    try { data = await res.json(); } catch {}
+
+    const msg = data?.Messages?.[0];
+    const mjStatus = msg?.Status;
+    const success = res.ok && mjStatus === 'success';
+
+    if (success) {
+      return json(200, {
+        success: true,
+        provider: 'mailjet',
+        mailjetStatus: mjStatus,
+        response: data,
+      });
+    }
+
+    const errors = msg?.Errors || data?.Errors || data?.ErrorMessage || data;
+    const errText = Array.isArray(errors)
+      ? errors.map((e) => e?.ErrorMessage || e?.Message || String(e)).join('; ')
+      : (errors?.Message || errors?.ErrorMessage || 'Mailjet API error');
+    return json(res.status || 500, {
+      success: false,
+      provider: 'mailjet',
+      mailjetStatus: mjStatus || 'error',
+      error: errText,
+      response: data,
+    });
   } catch (error) {
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ success: false, error: error.message || 'Unknown error' }),
-    };
+    return json(500, { success: false, error: error.message || 'Unknown error' });
   }
 };
