@@ -257,9 +257,14 @@ exports.handler = async (event, context) => {
             if (v != null && v !== '') sp.append(k, String(v));
           }
         }
-        const txt = await sendOnce(sp);
-        const credit = parseCreditValue(txt);
-  attempts.push({ label, credit: isNaN(credit) ? null : credit, sample: String(txt).slice(0, 2000) });
+  const txt = await sendOnce(sp);
+  const credit = parseCreditValue(txt);
+  // Root tag pro rychlou diagnostiku
+  let root = null;
+  const t = String(txt).trim();
+  const mRoot = t.replace(/^<\?xml[^>]*>/i, '').match(/^<\s*([a-zA-Z0-9:_-]+)/);
+  if (mRoot) root = mRoot[1];
+  attempts.push({ label, credit: isNaN(credit) ? null : credit, root, sample: t.slice(0, 2000) });
         return { txt, credit };
       };
 
@@ -311,7 +316,10 @@ exports.handler = async (event, context) => {
           }
           const txt = await sendOnce(sp, 'GET');
           const credit = parseCreditValue(txt);
-          attempts.push({ label: `${label} (GET)`, credit: isNaN(credit) ? null : credit, sample: String(txt).slice(0, 2000) });
+          const t = String(txt).trim();
+          const mRoot = t.replace(/^<\?xml[^>]*>/i, '').match(/^<\s*([a-zA-Z0-9:_-]+)/);
+          const root = mRoot ? mRoot[1] : null;
+          attempts.push({ label: `${label} (GET)`, credit: isNaN(credit) ? null : credit, root, sample: t.slice(0, 2000) });
           return { txt, credit };
         };
         const g1 = await runGet('action=credit', 'credit');
@@ -346,15 +354,38 @@ exports.handler = async (event, context) => {
         }
       }
 
-    const ok = !isNaN(chosen.credit);
+      const ok = !isNaN(chosen.credit);
+      if (ok) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ success: true, message: `Dostupný kredit: ${chosen.credit} Kč`, credit: chosen.credit, attempts })
+        };
+      }
+
+      // Zkus odvodit chybovou zprávu z odpovědí (např. <err>kód</err>)
+      const errMap = {
+        1: 'Chybí povinný parametr (login/password apod.).',
+        2: 'Neplatný login.',
+        3: 'Neplatné heslo.',
+        4: 'Nedostatečný kredit na účtu.',
+        5: 'Nepovolený nebo neplatný odesílatel (sender_id).',
+        6: 'Neplatné telefonní číslo nebo nepovolený formát.',
+      };
+      let providerError = null;
+      for (const a of attempts) {
+        const s = a?.sample || '';
+        const m = /<err>\s*(\d+)\s*<\/err>/i.exec(s);
+        if (m) { providerError = { code: Number(m[1]), text: errMap[Number(m[1])] || `Chyba poskytovatele (kód ${m[1]}).` }; break; }
+      }
       return {
         statusCode: 200,
         headers,
         body: JSON.stringify({
-          success: ok,
-          message: ok ? `Dostupný kredit: ${chosen.credit} Kč` : 'Kredit zjištěn, ale nelze přečíst hodnotu (viz attempts).',
-          credit: ok ? chosen.credit : undefined,
-      attempts
+          success: false,
+          message: providerError ? providerError.text : 'Kredit zjištěn, ale nelze přečíst hodnotu (viz attempts).',
+          errorCode: providerError?.code,
+          attempts
         })
       };
     } else {
