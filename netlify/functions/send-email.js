@@ -135,9 +135,11 @@ export const handler = async (event) => {
     }
     const attachments = Array.isArray(params.attachments) ? params.attachments : [];
 
-    // V prostředí Windows přesměrujeme na debug adresu
-    if (isWindowsEnv()) {
-      const debugEmail = process.env.DEBUG_EMAIL || 'debug-onlinesprava@vahalik.cz';
+    // V prostředí Windows případně přesměrujeme na debug adresu POUZE lokálně a pokud je nastavena DEBUG_EMAIL
+    const host = (event.headers && (event.headers.host || event.headers.Host)) || '';
+    const isLocalHost = /localhost|127\.0\.0\.1/i.test(host);
+    const debugEmail = process.env.DEBUG_EMAIL;
+    if (isWindowsEnv() && isLocalHost && debugEmail) {
       toEmail = debugEmail;
       toName = toName || 'Debug';
     }

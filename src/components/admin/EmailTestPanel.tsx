@@ -14,7 +14,11 @@ interface TestResult {
 export const EmailTestPanel: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
-  const [testEmail, setTestEmail] = useState('test@example.com');
+  // V produkci pošleme defaultně na provozní adresu (lze přepsat přes VITE_TEST_EMAIL_DEFAULT), v devu zůstává bezpečné test@example.com
+  const defaultTestEmail = ((import.meta as unknown as { env: { PROD?: boolean; VITE_TEST_EMAIL_DEFAULT?: string } }).env?.PROD
+    ? ((import.meta as unknown as { env: { VITE_TEST_EMAIL_DEFAULT?: string } }).env?.VITE_TEST_EMAIL_DEFAULT || 'kost@onlinesprava.cz')
+    : 'test@example.com');
+  const [testEmail, setTestEmail] = useState(defaultTestEmail);
   const [backendStatus, setBackendStatus] = useState<{ configured: boolean; fromEmail?: string; fromName?: string; missing?: string[] } | null>(null);
 
   const addTestResult = (type: string, success: boolean, message: string) => {
