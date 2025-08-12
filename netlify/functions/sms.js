@@ -120,25 +120,37 @@ exports.handler = async (event, context) => {
   params.append('type', 'sms');
     }
 
-  const sendOnce = async (searchParams) => {
-      const response = await fetch('https://api.smsbrana.cz/smsconnect/http.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: searchParams
-      });
-      const result = await response.text();
-      
-      // Debug logging do konzole
-      console.log('SMSbrana request:', {
-        url: 'https://api.smsbrana.cz/smsconnect/http.php',
-        params: Object.fromEntries(searchParams.entries()),
-        response: result,
-        httpStatus: response.status
-      });
-      
-  return result;
+    const sendOnce = async (searchParams, method = 'POST', timeoutMs = 10000) => {
+      const url = 'https://api.smsbrana.cz/smsconnect/http.php';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const opts = method === 'GET'
+          ? { method: 'GET', signal: controller.signal }
+          : {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: searchParams,
+              signal: controller.signal,
+            };
+        const response = await fetch(method === 'GET' ? `${url}?${searchParams.toString()}` : url, opts);
+        const result = await response.text();
+
+        const redacted = Object.fromEntries(searchParams.entries());
+        if (redacted.password) redacted.password = '***';
+        // Debug logging do konzole
+        console.log('SMSbrana request:', {
+          url,
+          method,
+          params: redacted,
+          response: result,
+          httpStatus: response.status
+        });
+        return result;
+      } catch (e) {
+        console.log('SMSbrana network error:', e?.message || String(e));
+        return `ERROR: ${e?.message || String(e)}`;
+      } finally { clearTimeout(timeout); }
     };
 
   let result = await sendOnce(params);
@@ -189,14 +201,40 @@ exports.handler = async (event, context) => {
       };
 
       // Pořadí variant (podle zkušenosti): credit, get_credit, account
-      const v1 = await run('action=credit', 'credit');
+      // Nejprve POST, pokud nelze přečíst, zkus GET (některé implementace preferují GET)
+      const v1 = await run('action=credit (POST)', 'credit');
       let chosen = v1;
       if (isNaN(v1.credit)) {
-        const v2 = await run('action=get_credit', 'get_credit');
+        const v2 = await run('action=get_credit (POST)', 'get_credit');
         chosen = isNaN(v2.credit) ? chosen : v2;
         if (isNaN(chosen.credit)) {
-          const v3 = await run('action=account', 'account');
+          const v3 = await run('action=account (POST)', 'account');
           chosen = isNaN(v3.credit) ? chosen : v3;
+        }
+      }
+      if (isNaN(chosen.credit)) {
+        // GET fallbacky
+        const runGet = async (label, overrideAction) => {
+          const sp = new URLSearchParams();
+          sp.append('action', overrideAction);
+          sp.append('login', login);
+          sp.append('password', password);
+          const txt = await sendOnce(sp, 'GET');
+          let credit = NaN;
+          const m1 = txt.match(/<credit>\s*([0-9]+(?:[.,][0-9]+)?)\s*<\/credit>/i);
+          if (m1) credit = parseFloat(m1[1].replace(',', '.'));
+          else {
+            const m2 = txt.match(/(?:credit|kredit)[\s:]*([0-9]+(?:[.,][0-9]+)?)/i);
+            if (m2) credit = parseFloat(m2[1].replace(',', '.'));
+          }
+          attempts.push({ label: `${label} (GET)`, credit: isNaN(credit) ? null : credit, sample: txt.slice(0, 200) });
+          return { txt, credit };
+        };
+        const g1 = await runGet('action=credit', 'credit');
+        chosen = isNaN(g1.credit) ? chosen : g1;
+        if (isNaN(chosen.credit)) {
+          const g2 = await runGet('action=get_credit', 'get_credit');
+          chosen = isNaN(g2.credit) ? chosen : g2;
         }
       }
 
