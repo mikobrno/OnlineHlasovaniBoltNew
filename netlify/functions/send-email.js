@@ -1,5 +1,4 @@
 // Posíláme výhradně přes Mailjet – žádný SMTP fallback
-import fs from 'fs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -165,20 +164,15 @@ export const handler = async (event) => {
       payload.Messages[0].CC = ccArray.filter(Boolean).map((e) => ({ Email: e }));
     }
 
-    // Zpracování příloh dle PHP (attachment_name, attachment_path, attachment_type)
+  // Zpracování příloh (attachment_name, attachment_type) — pouze Base64 z požadavku
     if (attachments.length > 0) {
       payload.Messages[0].Attachments = [];
       for (const att of attachments) {
         try {
           const name = att.attachment_name || att.filename || 'attachment';
           const type = att.attachment_type || att.content_type || 'application/octet-stream';
-          let base64Content = att.base64 || att.Base64Content;
-          const filePath = att.attachment_path || att.path;
-          if (!base64Content && filePath && fs.existsSync(filePath)) {
-            const buf = fs.readFileSync(filePath);
-            base64Content = buf.toString('base64');
-          }
-          if (base64Content) {
+      const base64Content = att.base64 || att.Base64Content;
+      if (typeof base64Content === 'string' && base64Content.trim()) {
             payload.Messages[0].Attachments.push({
               ContentType: type,
               Filename: name,
