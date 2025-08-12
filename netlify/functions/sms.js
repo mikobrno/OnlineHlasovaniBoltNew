@@ -121,7 +121,7 @@ exports.handler = async (event, context) => {
     }
 
     const sendOnce = async (searchParams, method = 'POST', timeoutMs = 10000) => {
-      const url = 'https://api.smsbrana.cz/smsconnect/http.php';
+      const url = process.env.SMSBRANA_API_URL || 'https://www.smsbrana.cz/smsconnect/http.php';
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
@@ -139,7 +139,7 @@ exports.handler = async (event, context) => {
         const redacted = Object.fromEntries(searchParams.entries());
         if (redacted.password) redacted.password = '***';
         // Debug logging do konzole
-        console.log('SMSbrana request:', {
+  console.log('SMSbrana request:', {
           url,
           method,
           params: redacted,
