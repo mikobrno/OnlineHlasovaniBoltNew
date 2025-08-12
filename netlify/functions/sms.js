@@ -15,6 +15,24 @@ exports.handler = async (event, context) => {
     return { statusCode: 200, headers, body: '' };
   }
 
+  // Simple GET diagnostics: reveal whether env is configured and which endpoint will be used
+  if (event.httpMethod === 'GET') {
+    const login = process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || '';
+    const password = process.env.SMSBRANA_PASSWORD || process.env.VITE_SMSBRANA_PASSWORD || '';
+    const apiUrl = process.env.SMSBRANA_API_URL || 'https://www.smsbrana.cz/smsconnect/http.php';
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        success: true,
+        configured: !!(login && password),
+        apiUrl,
+        hasLogin: !!login,
+        hasPassword: !!password
+      })
+    };
+  }
+
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
