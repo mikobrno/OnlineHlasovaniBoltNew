@@ -192,6 +192,27 @@ exports.handler = async (event, context) => {
       } catch { return null; }
     };
     
+    if (action === 'debug_credit_raw') {
+      const variants = [
+        { label: 'credit (POST)', action: 'credit', method: 'POST' },
+        { label: 'get_credit (POST)', action: 'get_credit', method: 'POST' },
+        { label: 'account (POST)', action: 'account', method: 'POST' },
+        { label: 'credit (GET)', action: 'credit', method: 'GET' },
+        { label: 'get_credit (GET)', action: 'get_credit', method: 'GET' },
+        { label: 'account (GET)', action: 'account', method: 'GET' },
+      ];
+      const outputs = [];
+      for (const v of variants) {
+        const sp = new URLSearchParams();
+        sp.append('action', v.action);
+        sp.append('login', login);
+        sp.append('password', password);
+        const txt = await sendOnce(sp, v.method);
+        outputs.push({ label: v.label, sample: String(txt).slice(0, 4000) });
+      }
+      return { statusCode: 200, headers, body: JSON.stringify({ success: true, outputs }) };
+    }
+
     if (action === 'check_credit') {
       // Pro některé účty může být akce jiná; zkusíme více variant a vybereme nejlepší
       const attempts = [];
