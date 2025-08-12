@@ -120,7 +120,7 @@ exports.handler = async (event, context) => {
   params.append('type', 'sms');
     }
 
-    const sendOnce = async (searchParams) => {
+  const sendOnce = async (searchParams) => {
       const response = await fetch('https://api.smsbrana.cz/smsconnect/http.php', {
         method: 'POST',
         headers: {
@@ -138,7 +138,7 @@ exports.handler = async (event, context) => {
         httpStatus: response.status
       });
       
-      return result;
+  return result;
     };
 
   let result = await sendOnce(params);
@@ -252,37 +252,77 @@ exports.handler = async (event, context) => {
         // Zkus jednoduchý fallback: parametr "numbers" a bez sender_id/route/type
         const firstErr = parseXmlError(result);
         if (firstErr?.code === 6) {
-          const alt = new URLSearchParams();
-          alt.append('action', 'send_sms');
-          alt.append('login', (process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || ''));
-          alt.append('password', (process.env.SMSBRANA_PASSWORD || process.env.VITE_SMSBRANA_PASSWORD || ''));
-          alt.append('numbers', normalizedNumber);
-          alt.append('message', message || '');
-          alt.append('unicode', '1');
-          alt.append('type', 'sms');
+          // Postupně zkoušíme několik kombinací parametrů/formatů čísla
+          const attempts = [];
 
-          const altResult = await sendOnce(alt);
-      console.log('SMS send - fallback(numbers) result:', altResult);
+          const trySend = async (label, buildParams) => {
+            const p = buildParams();
+            const r = await sendOnce(p);
+            const cls = classifyResult(r);
+            attempts.push({ label, ok: cls.ok, status: cls.status, raw: r?.slice(0, 200) });
+            return { r, cls };
+          };
 
-      const altClass = classifyResult(altResult);
-      if (altClass.ok) {
-            const smsId = (altResult.split(' ')[1] || '').trim();
-            return {
-              statusCode: 200,
-              headers,
-              body: JSON.stringify({ 
-                success: true, 
-                message: 'SMS byla odeslána', 
-                smsId,
-                normalizedNumber,
-        rawResult: altResult,
-        providerStatus: altClass.status || 'accepted(fallback)'
-              })
-            };
+          // 1) numbers=420xxxxxxxxx
+          const r1 = await trySend('numbers=420', () => {
+            const sp = new URLSearchParams();
+            sp.append('action', 'send_sms');
+            sp.append('login', (process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || ''));
+            sp.append('password', (process.env.SMSBRANA_PASSWORD || process.env.VITE_SMSBRANA_PASSWORD || ''));
+            sp.append('numbers', normalizedNumber);
+            sp.append('message', message || '');
+            sp.append('unicode', '1');
+            sp.append('type', 'sms');
+            return sp;
+          });
+          if (r1.cls.ok) {
+            const smsId = (r1.r.split(' ')[1] || '').trim();
+            return { statusCode: 200, headers, body: JSON.stringify({ success: true, message: 'SMS byla odeslána', smsId, normalizedNumber, rawResult: r1.r, providerStatus: r1.cls.status || 'accepted(fallback:numbers)', attempts }) };
           }
 
-          // Přepiš result pro finální hlášení
-          result = altResult;
+          // Připrav odvozené formáty
+          const with00420 = normalizedNumber.startsWith('420') ? `00${normalizedNumber}` : (normalizedNumber.startsWith('00') ? normalizedNumber : `00${normalizedNumber}`);
+          const withPlus420 = normalizedNumber.startsWith('420') ? `+${normalizedNumber}` : (normalizedNumber.startsWith('+') ? normalizedNumber : `+${normalizedNumber}`);
+
+          // 2) number=00420...
+          const r2 = await trySend('number=00420', () => {
+            const sp = new URLSearchParams();
+            sp.append('action', 'send_sms');
+            sp.append('login', (process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || ''));
+            sp.append('password', (process.env.SMSBRANA_PASSWORD || process.env.VITE_SMSBRANA_PASSWORD || ''));
+            sp.append('number', with00420);
+            sp.append('message', message || '');
+            sp.append('unicode', '1');
+            sp.append('type', 'sms');
+            return sp;
+          });
+          if (r2.cls.ok) {
+            const smsId = (r2.r.split(' ')[1] || '').trim();
+            return { statusCode: 200, headers, body: JSON.stringify({ success: true, message: 'SMS byla odeslána', smsId, normalizedNumber: with00420, rawResult: r2.r, providerStatus: r2.cls.status || 'accepted(fallback:00420)', attempts }) };
+          }
+
+          // 3) number=+420...
+          const r3 = await trySend('number=+420', () => {
+            const sp = new URLSearchParams();
+            sp.append('action', 'send_sms');
+            sp.append('login', (process.env.SMSBRANA_LOGIN || process.env.VITE_SMSBRANA_LOGIN || ''));
+            sp.append('password', (process.env.SMSBRANA_PASSWORD || process.env.VITE_SMSBRANA_PASSWORD || ''));
+            sp.append('number', withPlus420);
+            sp.append('message', message || '');
+            sp.append('unicode', '1');
+            sp.append('type', 'sms');
+            return sp;
+          });
+          if (r3.cls.ok) {
+            const smsId = (r3.r.split(' ')[1] || '').trim();
+            return { statusCode: 200, headers, body: JSON.stringify({ success: true, message: 'SMS byla odeslána', smsId, normalizedNumber: withPlus420, rawResult: r3.r, providerStatus: r3.cls.status || 'accepted(fallback:+420)', attempts }) };
+          }
+
+          // Přepiš result posledním pokusem, aby se vrátila poslední odpověď + přilož pokusy
+          result = r3.r;
+          // Dejte uživateli detail pokusů v odpovědi (bude v rawResult a attempts)
+          console.log('SMS send - attempts summary:', attempts);
+          // spadne do společného error return níže
         }
       }
 
@@ -305,7 +345,7 @@ exports.handler = async (event, context) => {
 
       // Chyba
     const parsedErr = parseXmlError(result);
-      return {
+    return {
         statusCode: 200,
         headers,
         body: JSON.stringify({ 
@@ -315,7 +355,7 @@ exports.handler = async (event, context) => {
           normalizedNumber,
           rawResult: result,
       providerStatus: 'rejected',
-          payloadSummary: { length: (message || '').length }
+      payloadSummary: { length: (message || '').length }
         })
       };
     }
