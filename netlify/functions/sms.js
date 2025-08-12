@@ -162,75 +162,55 @@ exports.handler = async (event, context) => {
     };
     
     if (action === 'check_credit') {
-      console.log('Credit check - raw result:', result);
-      
-      if (result.includes('ERROR')) {
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ 
-            success: false, 
-            message: `Chyba: ${result}`,
-            rawResult: result
-          })
-        };
-      } else {
-        // Robustní parsing kreditu s debug informacemi
+      // Pro některé účty může být akce jiná; zkusíme více variant a vybereme nejlepší
+      const attempts = [];
+
+      const run = async (label, overrideAction) => {
+        const sp = new URLSearchParams();
+        sp.append('action', overrideAction);
+        sp.append('login', login);
+        sp.append('password', password);
+        const txt = await sendOnce(sp);
+        // Hrubý parser kreditu
         let credit = NaN;
-        const debugInfo = { patterns: [] };
-        
-        // 1) XML <credit>123</credit> nebo <credit>123.45</credit>
-        const xmlMatch = result.match(/<credit>\s*([0-9]+(?:[.,][0-9]+)?)\s*<\/credit>/i);
-        if (xmlMatch) {
-          credit = parseFloat(xmlMatch[1].replace(',', '.'));
-          debugInfo.patterns.push(`XML: ${xmlMatch[1]} → ${credit}`);
-        }
-        
-        // 2) Vzor "credit: 200" nebo "kredit 200 Kč" (case insensitive)
+        const notes = [];
+        const m1 = txt.match(/<credit>\s*([0-9]+(?:[.,][0-9]+)?)\s*<\/credit>/i);
+        if (m1) { credit = parseFloat(m1[1].replace(',', '.')); notes.push(`XML:${m1[1]}`); }
         if (isNaN(credit)) {
-          const credMatch = result.match(/(?:credit|kredit)[\s:]*([0-9]+(?:[.,][0-9]+)?)/i);
-          if (credMatch) {
-            credit = parseFloat(credMatch[1].replace(',', '.'));
-            debugInfo.patterns.push(`Text: ${credMatch[0]} → ${credit}`);
-          }
+          const m2 = txt.match(/(?:credit|kredit)[\s:]*([0-9]+(?:[.,][0-9]+)?)/i);
+          if (m2) { credit = parseFloat(m2[1].replace(',', '.')); notes.push(`TEXT:${m2[0]}`); }
         }
-        
-        // 3) Vzor "200 Kč" nebo "200Kč"
         if (isNaN(credit)) {
-          const czMatch = result.match(/([0-9]+(?:[.,][0-9]+)?)\s*Kč/i);
-          if (czMatch) {
-            credit = parseFloat(czMatch[1].replace(',', '.'));
-            debugInfo.patterns.push(`CZK: ${czMatch[0]} → ${credit}`);
-          }
+          const m3 = txt.match(/([0-9]+(?:[.,][0-9]+)?)\s*Kč/i);
+          if (m3) { credit = parseFloat(m3[1].replace(',', '.')); notes.push(`CZK:${m3[0]}`); }
         }
-        
-        // 4) Hledáme "200" jako standalone číslo (ne součást XML verze)
-        if (isNaN(credit)) {
-          const standalone = result.match(/\b([0-9]+(?:[.,][0-9]+)?)\b/g);
-          if (standalone) {
-            // Vyfiltruj "1.0" a jiná podezřelá čísla
-            const filtered = standalone.filter(n => !['1.0', '0', '1'].includes(n) && parseFloat(n.replace(',', '.')) >= 5);
-            if (filtered.length > 0) {
-              credit = parseFloat(filtered[0].replace(',', '.'));
-              debugInfo.patterns.push(`Standalone: ${filtered[0]} → ${credit}`);
-            }
-          }
+        attempts.push({ label, credit: isNaN(credit) ? null : credit, sample: txt.slice(0, 200) });
+        return { txt, credit };
+      };
+
+      // Pořadí variant (podle zkušenosti): credit, get_credit, account
+      const v1 = await run('action=credit', 'credit');
+      let chosen = v1;
+      if (isNaN(v1.credit)) {
+        const v2 = await run('action=get_credit', 'get_credit');
+        chosen = isNaN(v2.credit) ? chosen : v2;
+        if (isNaN(chosen.credit)) {
+          const v3 = await run('action=account', 'account');
+          chosen = isNaN(v3.credit) ? chosen : v3;
         }
-        
-        console.log('Credit parsing result:', { credit, debugInfo, rawResult: result });
-        
-    return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ 
-            success: true, 
-      message: isNaN(credit) ? 'Kredit zjištěn, ale nelze přečíst hodnotu (viz rawResult).' : `Dostupný kredit: ${credit} Kč`,
-            credit: isNaN(credit) ? undefined : credit,
-            rawResult: result,
-            debugInfo
-          })
-        };
       }
+
+      const ok = !isNaN(chosen.credit);
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({
+          success: ok,
+          message: ok ? `Dostupný kredit: ${chosen.credit} Kč` : 'Kredit zjištěn, ale nelze přečíst hodnotu (viz attempts).',
+          credit: ok ? chosen.credit : undefined,
+          attempts
+        })
+      };
     } else {
       // send_sms
       const classifyResult = (txt) => {
