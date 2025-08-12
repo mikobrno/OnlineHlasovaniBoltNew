@@ -196,68 +196,115 @@ exports.handler = async (event, context) => {
       // Pro některé účty může být akce jiná; zkusíme více variant a vybereme nejlepší
       const attempts = [];
 
-      const run = async (label, overrideAction) => {
+      // Univerzální parser kreditu (JSON | XML | text)
+      const parseCreditValue = (txt) => {
+        try {
+          const t = (txt || '').trim();
+          // JSON varianta
+          if (/^[\[{]/.test(t)) {
+            try {
+              const obj = JSON.parse(t);
+              const candidates = ['credit', 'kredit', 'balance', 'stav', 'stav_konta'];
+              for (const k of candidates) {
+                if (obj && Object.prototype.hasOwnProperty.call(obj, k) && obj[k] != null) {
+                  const v = parseFloat(String(obj[k]).replace(',', '.'));
+                  if (!isNaN(v)) return v;
+                }
+              }
+            } catch { /* ignore JSON parse */ }
+          }
+          // XML varianta
+          const m1 = t.match(/<(?:credit|kredit|balance|stav|stav_konta)>\s*([0-9]+(?:[.,][0-9]+)?)\s*<\/(?:credit|kredit|balance|stav|stav_konta)>/i);
+          if (m1) {
+            const v = parseFloat(m1[1].replace(',', '.'));
+            if (!isNaN(v)) return v;
+          }
+          // Volný text
+          const m2 = t.match(/(?:credit|kredit|balance|stav)[\s:]*([0-9]+(?:[.,][0-9]+)?)/i);
+          if (m2) {
+            const v = parseFloat(m2[1].replace(',', '.'));
+            if (!isNaN(v)) return v;
+          }
+          const m3 = t.match(/([0-9]+(?:[.,][0-9]+)?)\s*(?:Kč|CZK)/i);
+          if (m3) {
+            const v = parseFloat(m3[1].replace(',', '.'));
+            if (!isNaN(v)) return v;
+          }
+        } catch { /* ignore */ }
+        return NaN;
+      };
+
+      const run = async (label, overrideAction, extraParams) => {
         const sp = new URLSearchParams();
         sp.append('action', overrideAction);
         sp.append('login', login);
         sp.append('password', password);
+        if (extraParams) {
+          for (const [k, v] of Object.entries(extraParams)) {
+            if (v != null && v !== '') sp.append(k, String(v));
+          }
+        }
         const txt = await sendOnce(sp);
-        // Hrubý parser kreditu
-        let credit = NaN;
-        const notes = [];
-        const m1 = txt.match(/<credit>\s*([0-9]+(?:[.,][0-9]+)?)\s*<\/credit>/i);
-        if (m1) { credit = parseFloat(m1[1].replace(',', '.')); notes.push(`XML:${m1[1]}`); }
-        if (isNaN(credit)) {
-          const m2 = txt.match(/(?:credit|kredit)[\s:]*([0-9]+(?:[.,][0-9]+)?)/i);
-          if (m2) { credit = parseFloat(m2[1].replace(',', '.')); notes.push(`TEXT:${m2[0]}`); }
-        }
-        if (isNaN(credit)) {
-          const m3 = txt.match(/([0-9]+(?:[.,][0-9]+)?)\s*Kč/i);
-          if (m3) { credit = parseFloat(m3[1].replace(',', '.')); notes.push(`CZK:${m3[0]}`); }
-        }
-        attempts.push({ label, credit: isNaN(credit) ? null : credit, sample: txt.slice(0, 200) });
+        const credit = parseCreditValue(txt);
+        attempts.push({ label, credit: isNaN(credit) ? null : credit, sample: String(txt).slice(0, 500) });
         return { txt, credit };
       };
 
       // Pořadí variant (podle zkušenosti): credit, get_credit, account
       // Nejprve POST, pokud nelze přečíst, zkus GET (některé implementace preferují GET)
       const v1 = await run('action=credit (POST)', 'credit');
+      // JSON varianta s explicitním char-setem (pokud poskytovatel podporuje)
+      const v1json = isNaN(v1.credit)
+        ? await run('action=credit&format=json&charset=utf-8 (POST)', 'credit', { format: 'json', charset: 'utf-8' })
+        : v1;
       let chosen = v1;
-      if (isNaN(v1.credit)) {
+      if (isNaN(v1.credit)) { chosen = v1json; }
+      if (isNaN(chosen.credit)) {
         const v2 = await run('action=get_credit (POST)', 'get_credit');
         chosen = isNaN(v2.credit) ? chosen : v2;
-        if (isNaN(chosen.credit)) {
-          const v3 = await run('action=account (POST)', 'account');
-          chosen = isNaN(v3.credit) ? chosen : v3;
-        }
+      }
+      if (isNaN(chosen.credit)) {
+        const v2json = await run('action=get_credit&format=json (POST)', 'get_credit', { format: 'json', charset: 'utf-8' });
+        chosen = isNaN(v2json.credit) ? chosen : v2json;
+      }
+      if (isNaN(chosen.credit)) {
+        const v3 = await run('action=account (POST)', 'account');
+        chosen = isNaN(v3.credit) ? chosen : v3;
       }
       if (isNaN(chosen.credit)) {
         // GET fallbacky
-        const runGet = async (label, overrideAction) => {
+        const runGet = async (label, overrideAction, extraParams) => {
           const sp = new URLSearchParams();
           sp.append('action', overrideAction);
           sp.append('login', login);
           sp.append('password', password);
-          const txt = await sendOnce(sp, 'GET');
-          let credit = NaN;
-          const m1 = txt.match(/<credit>\s*([0-9]+(?:[.,][0-9]+)?)\s*<\/credit>/i);
-          if (m1) credit = parseFloat(m1[1].replace(',', '.'));
-          else {
-            const m2 = txt.match(/(?:credit|kredit)[\s:]*([0-9]+(?:[.,][0-9]+)?)/i);
-            if (m2) credit = parseFloat(m2[1].replace(',', '.'));
+          if (extraParams) {
+            for (const [k, v] of Object.entries(extraParams)) {
+              if (v != null && v !== '') sp.append(k, String(v));
+            }
           }
-          attempts.push({ label: `${label} (GET)`, credit: isNaN(credit) ? null : credit, sample: txt.slice(0, 200) });
+          const txt = await sendOnce(sp, 'GET');
+          const credit = parseCreditValue(txt);
+          attempts.push({ label: `${label} (GET)`, credit: isNaN(credit) ? null : credit, sample: String(txt).slice(0, 500) });
           return { txt, credit };
         };
         const g1 = await runGet('action=credit', 'credit');
         chosen = isNaN(g1.credit) ? chosen : g1;
         if (isNaN(chosen.credit)) {
+          const g1json = await runGet('action=credit&format=json', 'credit', { format: 'json', charset: 'utf-8' });
+          chosen = isNaN(g1json.credit) ? chosen : g1json;
+        }
+        if (isNaN(chosen.credit)) {
           const g2 = await runGet('action=get_credit', 'get_credit');
           chosen = isNaN(g2.credit) ? chosen : g2;
         }
+        if (isNaN(chosen.credit)) {
+          const g2json = await runGet('action=get_credit&format=json', 'get_credit', { format: 'json', charset: 'utf-8' });
+          chosen = isNaN(g2json.credit) ? chosen : g2json;
+        }
       }
 
-      const ok = !isNaN(chosen.credit);
+    const ok = !isNaN(chosen.credit);
       return {
         statusCode: 200,
         headers,
@@ -265,7 +312,7 @@ exports.handler = async (event, context) => {
           success: ok,
           message: ok ? `Dostupný kredit: ${chosen.credit} Kč` : 'Kredit zjištěn, ale nelze přečíst hodnotu (viz attempts).',
           credit: ok ? chosen.credit : undefined,
-          attempts
+      attempts
         })
       };
     } else {
