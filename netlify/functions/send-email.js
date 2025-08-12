@@ -25,6 +25,35 @@ export const handler = async (event) => {
     if (!fromName) missing.push('MAILJET_FROM_NAME');
 
     const configured = missing.length === 0;
+
+    // Volitelná rychlá diagnostika účtu (bezpečný výřez informací)
+    let accountInfo = null;
+    if (configured) {
+      try {
+        const auth = Buffer.from(`${mjKey}:${mjSecret}`).toString('base64');
+        const resp = await fetch('https://api.mailjet.com/v3/REST/user', {
+          method: 'GET',
+          headers: { 'Authorization': `Basic ${auth}` },
+        });
+        const info = await resp.json().catch(() => null);
+        const user = Array.isArray(info?.Data) ? info.Data[0] : null;
+        if (user) {
+          const username = typeof user?.Username === 'string' ? user.Username : null;
+          const userId = user?.ID ?? null;
+          // Některé účty vrací pole "IsMaster" nebo "ACL"; spolehlivě jen naznačíme typ
+          const accountType = user?.IsMaster ? 'primary' : 'subaccount_or_primary';
+          accountInfo = { 
+            ok: resp.ok,
+            httpStatus: resp.status,
+            userId,
+            username,
+            accountType,
+          };
+        } else {
+          accountInfo = { ok: resp.ok, httpStatus: resp.status };
+        }
+      } catch { /* ignore diag errors */ }
+    }
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -35,6 +64,7 @@ export const handler = async (event) => {
         fromEmail,
         fromName,
         missing,
+        accountInfo,
         message: configured ? 'Email function ready (Mailjet)' : 'Mailjet is not fully configured'
       }),
     };
