@@ -513,7 +513,7 @@ export const SupabaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
       // Update local state
       const vote = state.votes.find(v => v.id === voteId);
       if (vote) {
-        const updatedVote = {
+    const updatedVote = {
           ...vote,
           memberVotes: {
             ...vote.memberVotes,
@@ -521,13 +521,13 @@ export const SupabaseAppProvider: React.FC<{ children: ReactNode }> = ({ childre
           },
           ...(isManual && attachments && {
             manualVoteAttachments: {
-              ...vote.manualVoteAttachments,
+      ...(vote.manualVoteAttachments || {}),
               [memberId]: attachments
             }
           }),
           ...(isManual && note && {
             manualVoteNotes: {
-              ...vote.manualVoteNotes,
+      ...(vote.manualVoteNotes || {}),
               [memberId]: note
             }
           })

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Edit, Mail, Download, FileText, BarChart3, Eye, Play, Paperclip } from 'lucide-react';
+import { ArrowLeft, Edit, Mail, Download, FileText, BarChart3, Eye, Play, Paperclip, FileDown } from 'lucide-react';
 import { Vote } from '../../data/mockData';
 import { useApp } from '../../contexts/AppContextCompat';
 import { useToast } from '../../contexts/ToastContext';
@@ -11,6 +11,7 @@ import { VotingProgressView } from './VotingProgressView';
 import { ResultsView } from './ResultsView';
 import { MemberManagementView } from './MemberManagementView';
 import { ObserversView } from './ObserversView';
+import { BallotTemplateModal } from './BallotTemplateModal';
 
 interface VoteDetailViewProps {
   vote: Vote;
@@ -28,6 +29,7 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
   const [activeTab, setActiveTab] = useState<'info' | 'members' | 'observers' | 'progress' | 'results' | 'attachments'>('info');
   const [showAttachmentModal, setShowAttachmentModal] = useState(false);
   const [selectedMemberAttachments, setSelectedMemberAttachments] = useState<{ member: string; attachments: string[]; note?: string } | null>(null);
+  const [showBallotModal, setShowBallotModal] = useState(false);
   
   const buildingMembers = members.filter(m => m.buildingId === vote.buildingId);
   const votedMembers = Object.keys(vote.memberVotes).length;
@@ -90,6 +92,10 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
                   </span>
                 </div>
                 <div className="flex space-x-2">
+                  <Button onClick={() => setShowBallotModal(true)} size="sm" title="Vytvořit / vytisknout hlasovací listinu">
+                    <FileDown className="w-4 h-4 mr-2" />
+                    Hlasovací listina
+                  </Button>
                   {vote.status === 'draft' && (
                     <Button onClick={handleStartVote} size="sm">
                       <Play className="w-4 h-4 mr-2" />
@@ -178,7 +184,7 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
     if (!vote.manualVoteAttachments) return null;
 
     const membersWithAttachments = Object.entries(vote.manualVoteAttachments)
-      .filter(([_, attachments]) => attachments.length > 0)
+      .filter((entry) => entry[1].length > 0)
       .map(([memberId, attachments]) => {
         const member = buildingMembers.find(m => m.id === memberId);
         const note = vote.manualVoteNotes?.[memberId];
@@ -267,7 +273,7 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as 'info' | 'members' | 'observers' | 'progress' | 'results' | 'attachments')}
               className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -329,6 +335,8 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
           </div>
         )}
       </Modal>
+
+  <BallotTemplateModal vote={vote} isOpen={showBallotModal} onClose={() => setShowBallotModal(false)} />
     </div>
   );
 };

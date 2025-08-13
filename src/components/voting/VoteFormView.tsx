@@ -30,6 +30,8 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [activeInput, setActiveInput] = useState<'title' | 'description' | null>(null);
   const [observers, setObservers] = useState<string[]>([]);
+  // Vyhledávání v seznamu proměnných v pravém panelu
+  const [varSearch, setVarSearch] = useState('');
 
   // Automatický výpočet konce hlasování
   useEffect(() => {
@@ -100,7 +102,11 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
     }]);
   };
 
-  const updateQuestion = (index: number, field: keyof Question, value: any) => {
+  const updateQuestion = (
+    index: number,
+    field: keyof Question,
+    value: string | number | Question['customQuorum']
+  ) => {
     const newQuestions = [...questions];
     newQuestions[index] = { ...newQuestions[index], [field]: value };
     setQuestions(newQuestions);
@@ -229,12 +235,12 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
         </Button>
       </div>
 
-      <div className="max-w-4xl">
+  <div className="max-w-6xl">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">
           {vote ? 'Upravit hlasování' : 'Nové hlasování'}
         </h1>
 
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+  <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
           <div className="xl:col-span-3">
             <form onSubmit={handleSubmit} className="space-y-6">
               {buildingTemplates.length > 0 && (
@@ -293,6 +299,7 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
                               checked={selectedTemplateId === template.id}
                               onChange={() => setSelectedTemplateId(template.id)}
                               className="mt-1"
+                              aria-label={`Vybrat šablonu ${template.name}`}
                             />
                           </div>
                           
@@ -375,6 +382,7 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
                         value={status}
                         onChange={(e) => setStatus(e.target.value as 'draft' | 'active')}
                         className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        aria-label="Stav hlasování"
                       >
                         <option value="draft">Návrh</option>
                         <option value="active">Aktivní</option>
@@ -462,6 +470,7 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
                               value={question.quorumType}
                               onChange={(e) => updateQuestion(index, 'quorumType', e.target.value)}
                               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              aria-label="Typ kvóra"
                             >
                               <option value="simple">Prostá většina (1/2)</option>
                               <option value="qualified">Kvalifikovaná většina (2/3)</option>
@@ -476,20 +485,22 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
                                 type="number"
                                 placeholder="Čitatel"
                                 value={question.customQuorum?.numerator || ''}
-                                onChange={(e) => updateQuestion(index, 'customQuorum', {
-                                  ...question.customQuorum,
-                                  numerator: parseInt(e.target.value) || 1
-                                })}
+                                onChange={(e) => {
+                                  const num = parseInt(e.target.value) || 1;
+                                  const current = question.customQuorum || { numerator: 1, denominator: 2 };
+                                  updateQuestion(index, 'customQuorum', { numerator: num, denominator: current.denominator });
+                                }}
                                 min="1"
                               />
                               <Input
                                 type="number"
                                 placeholder="Jmenovatel"
                                 value={question.customQuorum?.denominator || ''}
-                                onChange={(e) => updateQuestion(index, 'customQuorum', {
-                                  ...question.customQuorum,
-                                  denominator: parseInt(e.target.value) || 2
-                                })}
+                                onChange={(e) => {
+                                  const den = parseInt(e.target.value) || 2;
+                                  const current = question.customQuorum || { numerator: 1, denominator: 2 };
+                                  updateQuestion(index, 'customQuorum', { numerator: current.numerator, denominator: den });
+                                }}
                                 min="1"
                               />
                             </div>
@@ -525,6 +536,9 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
                       className="hidden"
                       id="file-upload"
                       accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
+                      aria-label="Přidat přílohy"
+                      title="Přidat přílohy"
+                      aria-hidden="true"
                     />
                     <Button
                       type="button"
@@ -575,7 +589,7 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
             </form>
           </div>
 
-          <div className="xl:col-span-1">
+          <div className="xl:col-span-2">
             <div className="sticky top-4 space-y-4">
             <Card className="p-4">
               <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
@@ -586,8 +600,27 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
                 {activeInput === 'description' && 'Klikněte na proměnnou pro vložení do popisu'}
                 {!activeInput && 'Klikněte do pole názvu nebo popisu a pak na proměnnou'}
               </div>
-              <div className="space-y-2 max-h-80 overflow-y-auto">
-                {voteRelevantVariables.map((variable) => (
+              {/* Vyhledávání v proměnných */}
+              <div className="mb-3">
+                <input
+                  type="text"
+                  value={varSearch}
+                  onChange={(e) => setVarSearch(e.target.value)}
+                  placeholder="Hledat proměnnou podle názvu nebo popisu..."
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1">
+                {voteRelevantVariables
+                  .filter(v => {
+                    if (!varSearch.trim()) return true;
+                    const q = varSearch.toLowerCase();
+                    return (
+                      v.name.toLowerCase().includes(q) ||
+                      (v.description || '').toLowerCase().includes(q)
+                    );
+                  })
+                  .map((variable) => (
                   <button
                     key={variable.name}
                     type="button"
@@ -616,6 +649,18 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
                     </div>
                   </button>
                 ))}
+                {voteRelevantVariables.filter(v => {
+                  if (!varSearch.trim()) return false; // pokud je prázdný dotaz, neukazuj hlášku
+                  const q = varSearch.toLowerCase();
+                  return (
+                    v.name.toLowerCase().includes(q) ||
+                    (v.description || '').toLowerCase().includes(q)
+                  );
+                }).length === 0 && (
+                  <div className="text-xs text-gray-600 dark:text-gray-400 p-2">
+                    Žádné proměnné neodpovídají dotazu.
+                  </div>
+                )}
               </div>
               
               <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">

@@ -172,7 +172,7 @@ exports.handler = async (event, context) => {
       } finally { clearTimeout(timeout); }
     };
 
-  let result = await sendOnce(params);
+  let result = await sendOnce(params, 'GET');
 
     // Helper: parse XML error code like <result><err>6</err></result>
     const parseXmlError = (text) => {
@@ -278,7 +278,7 @@ exports.handler = async (event, context) => {
             if (v != null && v !== '') sp.append(k, String(v));
           }
         }
-  const txt = await sendOnce(sp);
+  const txt = await sendOnce(sp, 'GET');
   const credit = parseCreditValue(txt);
   // Root tag pro rychlou diagnostiku
   let root = null;
@@ -435,7 +435,7 @@ exports.handler = async (event, context) => {
 
           const trySend = async (label, buildParams) => {
             const p = buildParams();
-            const r = await sendOnce(p);
+            const r = await sendOnce(p, 'GET');
             const cls = classifyResult(r);
             attempts.push({ label, ok: cls.ok, status: cls.status, raw: r?.slice(0, 200) });
             return { r, cls };

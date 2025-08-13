@@ -10,9 +10,14 @@ import {
 } from '../data/mockData';
 
 // Helper function to handle Supabase errors with more context
-const handleSupabaseError = (error: any, operation: string) => {
+const handleSupabaseError = (error: unknown, operation: string) => {
   // Wrap error with context for UI toast; avoid noisy console logs
-  throw new Error(`${operation} failed: ${error?.message || error?.details || 'Unknown error'}`);
+  let msg = 'Unknown error';
+  if (error && typeof error === 'object') {
+    const errObj = error as { message?: string; details?: string };
+    msg = errObj.message || errObj.details || msg;
+  }
+  throw new Error(`${operation} failed: ${msg}`);
 };
 
 // Building Services
@@ -486,15 +491,8 @@ export const voteService = {
   },
 
   async castVote(voteId: string, memberId: string, answers: Record<string, 'yes' | 'no' | 'abstain'>, attachments?: string[], note?: string): Promise<void> {
-    // Delete existing votes for this member
-    await supabase
-      .from('member_votes')
-      .delete()
-      .eq('vote_id', voteId)
-      .eq('member_id', memberId);
-
-    // Insert new votes
-    const votesToInsert = Object.entries(answers).map(([questionId, answer]) => ({
+    // Upsert votes to avoid UNIQUE violations and reduce round-trips
+    const votesToUpsert = Object.entries(answers).map(([questionId, answer]) => ({
       vote_id: voteId,
       member_id: memberId,
       question_id: questionId,
@@ -503,20 +501,24 @@ export const voteService = {
 
     const { error: voteError } = await supabase
       .from('member_votes')
-      .insert(votesToInsert);
-    
-    if (voteError) throw voteError;
+      .upsert(votesToUpsert, { onConflict: 'vote_id,member_id,question_id' });
 
-    // Handle attachments if provided
+    if (voteError) {
+      handleSupabaseError(voteError, 'zapisování hlasu (member_votes)');
+    }
+
+    // Attachments: replace for this member, but don't fail whole operation on attachment errors
     if (attachments && attachments.length > 0) {
-      // Delete existing attachments
-      await supabase
+      const { error: delAttErr } = await supabase
         .from('manual_vote_attachments')
         .delete()
         .eq('vote_id', voteId)
         .eq('member_id', memberId);
+      if (delAttErr) {
+        // Don't block; just continue
+        console.warn('Chyba při mazání starých příloh:', delAttErr);
+      }
 
-      // Insert new attachments
       const attachmentsToInsert = attachments.map(attachment => ({
         vote_id: voteId,
         member_id: memberId,
@@ -526,29 +528,43 @@ export const voteService = {
       const { error: attachmentError } = await supabase
         .from('manual_vote_attachments')
         .insert(attachmentsToInsert);
-      
-      if (attachmentError) throw attachmentError;
+      if (attachmentError) {
+        console.warn('Chyba při ukládání příloh (neblokuje hlas):', attachmentError);
+      }
+    } else {
+      // Pokud nejsou přílohy a nějaké v DB byly, smažeme je, ale neblokujeme chybu
+      const { error: delAttErr } = await supabase
+        .from('manual_vote_attachments')
+        .delete()
+        .eq('vote_id', voteId)
+        .eq('member_id', memberId);
+      if (delAttErr) {
+        console.warn('Chyba při čištění příloh:', delAttErr);
+      }
     }
 
-    // Handle note if provided
-    if (note) {
-      // Delete existing note
-      await supabase
+    // Note: upsert by unique (vote_id, member_id)
+    if (note && note.trim().length > 0) {
+      const { error: noteError } = await supabase
+        .from('manual_vote_notes')
+        .upsert({
+          vote_id: voteId,
+          member_id: memberId,
+          note
+        }, { onConflict: 'vote_id,member_id' });
+      if (noteError) {
+        handleSupabaseError(noteError, 'ukládání poznámky (manual_vote_notes)');
+      }
+    } else {
+      // Pokud není poznámka, smažeme existující (neblokující)
+      const { error: delNoteErr } = await supabase
         .from('manual_vote_notes')
         .delete()
         .eq('vote_id', voteId)
         .eq('member_id', memberId);
-
-      // Insert new note
-      const { error: noteError } = await supabase
-        .from('manual_vote_notes')
-        .insert({
-          vote_id: voteId,
-          member_id: memberId,
-          note
-        });
-      
-      if (noteError) throw noteError;
+      if (delNoteErr) {
+        console.warn('Chyba při mazání poznámky:', delNoteErr);
+      }
     }
   }
 };

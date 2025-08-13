@@ -374,6 +374,8 @@ ALTER TABLE IF EXISTS questions ADD COLUMN IF NOT EXISTS question_type TEXT DEFA
 ALTER TABLE IF EXISTS questions ADD COLUMN IF NOT EXISTS quorum_type TEXT DEFAULT 'simple';
 ALTER TABLE IF EXISTS member_votes ADD COLUMN IF NOT EXISTS is_delegated BOOLEAN DEFAULT false;
 ALTER TABLE IF EXISTS member_votes ADD COLUMN IF NOT EXISTS voting_power_used DECIMAL(10,4) DEFAULT 1.0000;
+-- Starší verze tabulky votes nemusí mít vote_statistics; potřebné pro trigger update_vote_statistics
+ALTER TABLE IF EXISTS votes ADD COLUMN IF NOT EXISTS vote_statistics JSONB DEFAULT '{}';
 
 -- Pojistka: sjednocení CHECK constraintu pro building_variable_definitions.type (některé starší DB nemusí povolovat 'number')
 ALTER TABLE IF EXISTS building_variable_definitions DROP CONSTRAINT IF EXISTS building_variable_definitions_type_check;

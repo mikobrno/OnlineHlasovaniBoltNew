@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { useApp } from '../../contexts/AppContextCompat';
 import { PageHeader } from '../common/PageHeader';
@@ -24,6 +24,16 @@ export const VotesListView: React.FC = () => {
     const matchesStatus = statusFilter === 'all' || vote.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  // Udržuj otevřený detail hlasování v aktuálním stavu z kontextu (po ručním hlasu apod.)
+  useEffect(() => {
+    if (selectedVote) {
+      const updated = votes.find(v => v.id === selectedVote.id);
+      if (updated) {
+        setSelectedVote(updated);
+      }
+    }
+  }, [votes, selectedVote]);
 
   if (showForm) {
     return (
@@ -74,6 +84,8 @@ export const VotesListView: React.FC = () => {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
         </div>
         <select
+          aria-label="Filtr stavu hlasování"
+          title="Filtrovat podle stavu hlasování"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"

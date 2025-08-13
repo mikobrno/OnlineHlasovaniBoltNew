@@ -8,6 +8,7 @@ import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import { Input } from '../common/Input';
 import { generateId } from '../../lib/utils';
+import { sendEmailViaGmail } from '../../lib/emailService';
 
 interface ObserversViewProps {
   vote: Vote;
@@ -63,9 +64,39 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote }) => {
     }
   };
 
-  const sendObserverInvitation = (observer: Observer) => {
-    // Simulate sending email
-    showToast(`Pozvánka byla odeslána na ${observer.email}`, 'success');
+  const sendObserverInvitation = async (observer: Observer, isResend = false) => {
+    try {
+      const appBase = window.location.origin;
+      // Jednoduchý proklik do aplikace s kontextem hlasování; finální veřejný pohled lze doplnit později
+      const ctaUrl = `${appBase}/?observe=${encodeURIComponent(vote.id)}&observer=${encodeURIComponent(observer.id)}`;
+  const subject = `${isResend ? 'Znovu: ' : ''}Pozvánka k sledování hlasování - ${vote.title}`;
+      const html = `
+        <!DOCTYPE html>
+        <html><head><meta charset="utf-8"><title>Pozvánka pro pozorovatele</title></head>
+        <body style="font-family:Arial,sans-serif;color:#111;line-height:1.6">
+          <div style="max-width:640px;margin:0 auto;padding:16px">
+            <h2>Byl(a) jste přidán(a) jako pozorovatel</h2>
+            <p>Hlasování: <strong>${vote.title}</strong></p>
+            ${vote.description ? `<p>${vote.description}</p>` : ''}
+            <p>
+              Klikněte pro otevření aplikace a sledování průběhu:
+            </p>
+            <p>
+              <a href="${ctaUrl}" style="display:inline-block;background:#4F46E5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:bold">Otevřít sledování</a>
+            </p>
+            <p style="color:#555;font-size:14px">Pokud tlačítko nefunguje, zkopírujte odkaz do prohlížeče:<br>${ctaUrl}</p>
+          </div>
+        </body></html>`;
+
+      const result = await sendEmailViaGmail({ to: observer.email, subject, html });
+      if (result.success) {
+        showToast(`Pozvánka ${isResend ? 'znovu ' : ''}odeslána na ${observer.email}`, 'success');
+      } else {
+        showToast(`E‑mail se nepodařilo odeslat: ${result.error || 'neznámá chyba'}`, 'error');
+      }
+    } catch (e) {
+      showToast(`Chyba při odesílání pozvánky: ${e instanceof Error ? e.message : 'neznámá chyba'}`, 'error');
+    }
   };
 
   return (
@@ -112,7 +143,9 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote }) => {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => sendObserverInvitation(observer)}
+                    onClick={() => sendObserverInvitation(observer, true)}
+                    title="Znovu poslat pozvánku"
+                    aria-label="Znovu poslat pozvánku"
                   >
                     <Mail className="w-4 h-4" />
                   </Button>
@@ -154,6 +187,16 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote }) => {
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Přidat
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => sendObserverInvitation(observer, false)}
+                    title="Poslat pozvánku"
+                    aria-label="Poslat pozvánku"
+                  >
+                    <Mail className="w-4 h-4 mr-2" />
+                    Poslat
                   </Button>
                   <Button
                     size="sm"

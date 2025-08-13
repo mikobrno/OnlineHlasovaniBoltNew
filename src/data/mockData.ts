@@ -60,6 +60,16 @@ export interface EmailTemplate {
   customVariables?: Variable[];
 }
 
+export interface DocumentTemplate {
+  id: string;
+  name: string;
+  body: string;
+  buildingId?: string;
+  isGlobal: boolean;
+  customVariables?: Variable[];
+  helpText?: string;
+}
+
 export interface Variable {
   name: string;
   description: string;

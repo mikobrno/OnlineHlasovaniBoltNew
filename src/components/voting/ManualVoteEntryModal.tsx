@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Upload, X, FileText, Paperclip } from 'lucide-react';
 import { Vote } from '../../data/mockData';
 import { useApp } from '../../contexts/AppContextCompat';
@@ -28,9 +28,9 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
 
   const buildingMembers = members.filter(m => m.buildingId === vote.buildingId);
   const member = buildingMembers.find(m => m.id === memberId);
-  const currentVotes = vote.memberVotes[memberId] || {};
-  const currentAttachments = vote.manualVoteAttachments?.[memberId] || [];
-  const currentNote = vote.manualVoteNotes?.[memberId] || '';
+  const currentVotes = useMemo(() => vote.memberVotes[memberId] || {}, [vote.memberVotes, memberId]);
+  const currentAttachments = useMemo(() => vote.manualVoteAttachments?.[memberId] || [], [vote.manualVoteAttachments, memberId]);
+  const currentNote = useMemo(() => vote.manualVoteNotes?.[memberId] || '', [vote.manualVoteNotes, memberId]);
 
   useEffect(() => {
     setAnswers(currentVotes);
@@ -145,6 +145,8 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
                     className="hidden"
                     id="manual-vote-upload"
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
+                    aria-label="Přidat soubory k ručnímu hlasu"
+                    title="Přidat soubory"
                   />
                   <Button
                     type="button"
@@ -203,10 +205,10 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
         </div>
 
         <div className="flex justify-end space-x-3">
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose} title="Zavřít bez uložení">
             Zrušit
           </Button>
-          <Button onClick={handleSubmit}>
+          <Button onClick={handleSubmit} title="Uložit ruční hlas za člena">
             Zadat hlas
           </Button>
         </div>

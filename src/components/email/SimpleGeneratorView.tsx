@@ -6,6 +6,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { replaceVariables } from '../../lib/utils';
 import * as emailService from '../../lib/emailService';
+import { EmailPreviewModal } from './EmailPreviewModal';
 
 export const SimpleGeneratorView: React.FC = () => {
   const { templates, members, selectedBuilding, globalVariables } = useApp();
@@ -14,6 +15,7 @@ export const SimpleGeneratorView: React.FC = () => {
   const [testEmail, setTestEmail] = useState('');
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [lastTestResult, setLastTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const availableTemplates = templates.filter(t => 
     t.isGlobal || t.buildingId === selectedBuilding?.id
@@ -151,7 +153,16 @@ export const SimpleGeneratorView: React.FC = () => {
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
               Náhled e-mailu
             </h3>
-            <Eye className="w-5 h-5 text-gray-400" />
+            <button
+              type="button"
+              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              onClick={() => setIsPreviewOpen(true)}
+              aria-label="Otevřít velký náhled e‑mailu"
+              title="Otevřít velký náhled e‑mailu"
+              disabled={!selectedTemplate || !currentMember}
+            >
+              <Eye className={`w-5 h-5 ${selectedTemplate && currentMember ? 'text-blue-600' : 'text-gray-400'}`} />
+            </button>
           </div>
 
           {selectedTemplate && currentMember ? (
@@ -204,6 +215,13 @@ export const SimpleGeneratorView: React.FC = () => {
           )}
         </Card>
       </div>
+
+      <EmailPreviewModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        subject={generatedSubject}
+        html={generatedBody}
+      />
 
       {buildingMembers.length === 0 && selectedBuilding && (
         <Card className="p-6 mt-6">

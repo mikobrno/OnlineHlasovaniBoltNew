@@ -65,6 +65,12 @@ export const TemplateManager: React.FC = () => {
         </Button>
       </div>
 
+      <div className="mb-4 p-3 rounded border border-yellow-200 bg-yellow-50 dark:border-yellow-700 dark:bg-yellow-900/20 text-sm text-yellow-800 dark:text-yellow-200">
+        Tip: Šablony podporují proměnné ve tvaru <span className="font-mono">{'{{nazev}}'}</span>.
+        U speciálních šablon s opakováním seznamu (např. seznam otázek) použijte blok
+        {' '}<code className="px-1 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">{'{{#questions}}...{{/questions}}'}</code>.
+      </div>
+
       <div className="grid grid-cols-1 gap-4">
         {templates.map((template) => (
           <Card key={template.id} className="p-6">

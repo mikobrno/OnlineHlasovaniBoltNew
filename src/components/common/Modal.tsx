@@ -28,13 +28,16 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="flex min-h-screen items-center justify-center p-4 relative">
+        {/* Overlay pod oknem */}
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+          className="fixed inset-0 bg-black bg-opacity-50 transition-opacity z-40"
           onClick={onClose}
+          aria-hidden="true"
         />
+        {/* Vlastní okno modalu nad overlayem */}
         <div className={cn(
-          'relative w-full rounded-lg bg-white dark:bg-gray-800 shadow-xl',
+          'relative z-50 w-full rounded-lg bg-white dark:bg-gray-800 shadow-xl',
           sizeClasses[size]
         )}>
           <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
@@ -44,6 +47,8 @@ export const Modal: React.FC<ModalProps> = ({
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+              aria-label="Zavřít dialog"
+              title="Zavřít"
             >
               <X className="w-5 h-5" />
             </button>

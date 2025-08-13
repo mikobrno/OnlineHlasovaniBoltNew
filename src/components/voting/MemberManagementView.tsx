@@ -197,6 +197,7 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
                           size="sm"
                           variant="ghost"
                           onClick={() => sendInvitation(member.id)}
+                          title="Poslat pozvánku e‑mailem"
                         >
                           <Mail className="w-4 h-4" />
                         </Button>
@@ -205,6 +206,7 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
                           size="sm"
                           variant="ghost"
                           onClick={() => resendInvitation(member.id)}
+                          title="Znovu poslat pozvánku e‑mailem"
                         >
                           <Mail className="w-4 h-4" />
                         </Button>
@@ -217,6 +219,7 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
                           setSelectedMemberId(member.id);
                           setShowRepresentativeModal(true);
                         }}
+                        title="Nastavit/změnit zástupce"
                       >
                         <UserCheck className="w-4 h-4" />
                       </Button>
@@ -229,6 +232,7 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
                             setSelectedMemberId(member.id);
                             setShowVoteModal(true);
                           }}
+                          title="Ruční zadání hlasu"
                         >
                           <Edit className="w-4 h-4" />
                         </Button>

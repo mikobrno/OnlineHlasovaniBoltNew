@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Building, Mail, Settings, Globe, Database, TestTube } from 'lucide-react';
+import { Building, Settings, Globe, Database, TestTube, FileText } from 'lucide-react';
 import { Card } from '../common/Card';
 import { BuildingManager } from './BuildingManager';
-import { TemplateManager } from './TemplateManager';
+import { TemplatesView } from './TemplatesView';
 import { GlobalVariablesManager } from './GlobalVariablesManager';
 import { BuildingVariablesManager } from './BuildingVariablesManager';
 import { SettingsView } from './SettingsView';
@@ -12,8 +12,8 @@ export const AdminView: React.FC = () => {
   const [activeSection, setActiveSection] = useState<'buildings' | 'templates' | 'email-test' | 'global-variables' | 'building-variables' | 'settings'>('buildings');
 
   const sections = [
-    { id: 'buildings' as const, label: 'Budovy', icon: <Building className="w-5 h-5" />, component: BuildingManager },
-    { id: 'templates' as const, label: 'E-mailové šablony', icon: <Mail className="w-5 h-5" />, component: TemplateManager },
+  { id: 'buildings' as const, label: 'Budovy', icon: <Building className="w-5 h-5" />, component: BuildingManager },
+  { id: 'templates' as const, label: 'Šablony', icon: <FileText className="w-5 h-5" />, component: TemplatesView },
     { id: 'email-test' as const, label: 'Test Email Systému', icon: <TestTube className="w-5 h-5" />, component: EmailTestPanel },
     { id: 'global-variables' as const, label: 'Globální proměnné', icon: <Globe className="w-5 h-5" />, component: GlobalVariablesManager },
     { id: 'building-variables' as const, label: 'Proměnné budov', icon: <Database className="w-5 h-5" />, component: BuildingVariablesManager },

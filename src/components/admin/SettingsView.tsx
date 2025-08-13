@@ -13,14 +13,6 @@ interface AppSettings {
   defaultLanguage: string;
   timezone: string;
   
-  // E-mail nastavení
-  smtpHost: string;
-  smtpPort: number;
-  smtpUsername: string;
-  smtpPassword: string;
-  fromEmail: string;
-  fromName: string;
-  
   // SMS nastavení
   smsProvider: string;
   smsUsername: string;
@@ -48,13 +40,6 @@ const defaultSettings: AppSettings = {
   appDescription: 'Systém pro správu hlasování a komunikace v SVJ/BD',
   defaultLanguage: 'cs',
   timezone: 'Europe/Prague',
-  
-  smtpHost: '',
-  smtpPort: 587,
-  smtpUsername: '',
-  smtpPassword: '',
-  fromEmail: 'noreply@onlinesprava.cz',
-  fromName: 'OnlineSprava',
   
   smsProvider: 'smsbrana',
   smsUsername: '',
@@ -176,7 +161,6 @@ export const SettingsView: React.FC = () => {
 
   const sections = [
     { id: 'general', label: 'Obecné', icon: <Globe className="w-4 h-4" /> },
-    { id: 'email', label: 'E-mail', icon: <Mail className="w-4 h-4" /> },
     { id: 'sms', label: 'SMS', icon: <div className="w-4 h-4 flex items-center justify-center text-xs">📱</div> },
     { id: 'security', label: 'Bezpečnost', icon: <Shield className="w-4 h-4" /> },
     { id: 'notifications', label: 'Notifikace', icon: <Bell className="w-4 h-4" /> },
@@ -240,56 +224,7 @@ export const SettingsView: React.FC = () => {
     </Card>
   );
 
-  const renderEmailSettings = () => (
-    <Card className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-        SMTP nastavení
-      </h3>
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="SMTP server"
-            value={settings.smtpHost}
-            onChange={(e) => handleSettingChange('smtpHost', e.target.value)}
-            placeholder="smtp.gmail.com"
-          />
-          <Input
-            label="Port"
-            type="number"
-            value={settings.smtpPort}
-            onChange={(e) => handleSettingChange('smtpPort', parseInt(e.target.value))}
-            placeholder="587"
-          />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Uživatelské jméno"
-            value={settings.smtpUsername}
-            onChange={(e) => handleSettingChange('smtpUsername', e.target.value)}
-          />
-          <Input
-            label="Heslo"
-            type="password"
-            value={settings.smtpPassword}
-            onChange={(e) => handleSettingChange('smtpPassword', e.target.value)}
-          />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label="Odesílatel (e-mail)"
-            type="email"
-            value={settings.fromEmail}
-            onChange={(e) => handleSettingChange('fromEmail', e.target.value)}
-          />
-          <Input
-            label="Odesílatel (jméno)"
-            value={settings.fromName}
-            onChange={(e) => handleSettingChange('fromName', e.target.value)}
-          />
-        </div>
-      </div>
-    </Card>
-  );
+
 
   const renderSMSSettings = () => (
     <div className="space-y-6">
@@ -628,7 +563,6 @@ export const SettingsView: React.FC = () => {
   const renderActiveSection = () => {
     switch (activeSection) {
       case 'general': return renderGeneralSettings();
-      case 'email': return renderEmailSettings();
       case 'sms': return renderSMSSettings();
       case 'security': return renderSecuritySettings();
       case 'notifications': return renderNotificationSettings();

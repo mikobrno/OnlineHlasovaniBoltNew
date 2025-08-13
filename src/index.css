@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* A4 preview helpers */
+.doc-a4 {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 15mm;
+  transform-origin: top left;
+}
+.zoom-75 { transform: scale(0.75); }
+.zoom-90 { transform: scale(0.9); }
+.zoom-100 { transform: scale(1); }
+.zoom-125 { transform: scale(1.25); }
+.zoom-150 { transform: scale(1.5); }
+
 /* Ensure proper loading */
 body {
   margin: 0;
