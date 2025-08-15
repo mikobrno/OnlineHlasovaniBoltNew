@@ -1,6 +1,9 @@
-import { NhostClient } from '@nhost/nhost-js';
+import { NhostClient } from '@nhost/react';
 
-export const nhost = new NhostClient({
-  subdomain: 'zrgbhrxnkjggssfhjqwp',
-  region: 'eu-central-1'
+const nhost = new NhostClient({
+    subdomain: 'zrgbhrxnkjggssfhjqwp',
+    region: 'eu-central-1',
+    start: true // Automaticky naváže spojení při inicializaci
 });
+
+export default nhost;

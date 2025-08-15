@@ -1,9 +1,7 @@
-// src/components/members/MembersView.tsx
-
 import React, { useState } from 'react';
 import { Plus, Upload, Search } from 'lucide-react';
-import { useQuery, useMutation, gql } from '@apollo/client';
-import { useApp } from '../../hooks/useApp'; // Tento bude potřeba pro selectedBuilding
+import { useQuery, useMutation } from '@apollo/client';
+import { useApp } from '../../contexts/AppContext';
 import { useToast } from '../../contexts/ToastContext';
 import { PageHeader } from '../common/PageHeader';
 import { Input } from '../common/Input';
@@ -11,58 +9,40 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { MemberFormModal } from './MemberFormModal';
 import { ImportMembersModal } from './ImportMembersModal';
-import type { Member as MemberType } from '../../data/mockData'; // Používáme Type pro zpětnou kompatibilitu
-
-// GraphQL dotaz pro načtení členů
-const GET_MEMBERS_QUERY = gql`
-  query GetMembers($buildingId: uuid!) {
-    members(where: { building_id: { _eq: $buildingId } }) {
-      id
-      name
-      email
-      phone
-      unit
-      vote_weight
-      representative_id
-      building_id
-    }
-  }
-`;
-
-// GraphQL mutace pro smazání člena
-const DELETE_MEMBER_MUTATION = gql`
-  mutation DeleteMember($id: uuid!) {
-    delete_members_by_pk(id: $id) {
-      id
-    }
-  }
-`;
+import {
+    GET_MEMBERS,
+    DELETE_MEMBER,
+    type Member
+} from '../../graphql/members';
 
 export const MembersView: React.FC = () => {
-  const { selectedBuilding } = useApp(); // Získáme info o budově
+  const { selectedBuilding } = useApp();
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [editingMember, setEditingMember] = useState<MemberType | null>(null);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
 
   // Načtení členů pomocí GraphQL
-  const { data, loading, error, refetch } = useQuery(GET_MEMBERS_QUERY, {
+  const { data, loading, error, refetch } = useQuery(GET_MEMBERS, {
     variables: { buildingId: selectedBuilding?.id },
-    skip: !selectedBuilding?.id, // Přeskočí dotaz, pokud není vybrána budova
+    skip: !selectedBuilding?.id,
   });
 
   // Mutace pro smazání člena
-  const [deleteMemberMutation] = useMutation(DELETE_MEMBER_MUTATION, {
+  const [deleteMemberMutation] = useMutation(DELETE_MEMBER, {
     refetchQueries: [
       {
-        query: GET_MEMBERS_QUERY,
+        query: GET_MEMBERS,
         variables: { buildingId: selectedBuilding?.id },
       },
     ],
+    onError: (error) => {
+      showToast(`Chyba při mazání člena: ${error.message}`, 'error');
+    }
   });
 
-  const members: MemberType[] = data?.members || [];
+  const members: Member[] = data?.members || [];
   
   const filteredMembers = members.filter((member: MemberType) =>
     member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -70,20 +50,23 @@ export const MembersView: React.FC = () => {
     member.unit.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleEdit = (member: MemberType) => {
+  const handleEdit = (member: Member) => {
     setEditingMember(member);
     setShowForm(true);
   };
 
-  const handleDelete = (member: MemberType) => {
-    if (window.confirm(`Opravdu chcete smazat člena ${member.name}?`)) {
-      deleteMemberMutation({ variables: { id: member.id } })
-        .then(() => {
-          showToast('Člen byl úspěšně smazán', 'success');
-        })
-        .catch((err) => {
-          showToast(`Chyba při mazání člena: ${err.message}`, 'error');
-        });
+  const handleDelete = async (member: Member) => {
+    if (!window.confirm(`Opravdu chcete smazat člena ${member.name}?`)) {
+      return;
+    }
+
+    try {
+      await deleteMemberMutation({ 
+        variables: { id: member.id },
+      });
+      showToast('Člen byl úspěšně smazán', 'success');
+    } catch {
+      // Chybu už zpracovává onError v konfiguraci mutace
     }
   };
 
@@ -159,8 +142,8 @@ export const MembersView: React.FC = () => {
               </thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredMembers.map((member) => {
-                  const representative = member.representativeId
-                    ? members.find(m => m.id === member.representativeId)
+                  const representative = member.representative_id
+                    ? members.find(m => m.id === member.representative_id)
                     : null;
                     
                   return (
@@ -178,7 +161,7 @@ export const MembersView: React.FC = () => {
                         {member.unit}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {member.voteWeight}
+                        {member.vote_weight}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         {representative ? representative.name : '-'}

@@ -1,99 +1,29 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Plus, MapPin, Users, Settings } from 'lucide-react';
-import { useApp } from '../hooks/useApp';
+import { useQuery } from '@apollo/client';
+import { GET_BUILDINGS_QUERY } from '../graphql/queries';
+import { useApp } from '../contexts/AppContext';
 import { Card } from './common/Card';
 import { Button } from './common/Button';
 import { BuildingManager } from './admin/BuildingManager';
 import { BuildingEditor } from './admin/BuildingEditor';
 import { useToast } from '../contexts/ToastContext';
-import type { Building } from '../data/mockData';
+import type { Building } from '../contexts/AppContext';
 
 export const BuildingSelector: React.FC = () => {
-  const { buildings, selectBuilding, loadBuildings, error, loading } = useApp();
+  const { selectBuilding } = useApp();
   const [showBuildingManager, setShowBuildingManager] = React.useState(false);
   const [showBuildingEditor, setShowBuildingEditor] = React.useState(false);
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [seeding, setSeeding] = React.useState(false);
 
-  const seedDemoData = async () => {
-    // Safety: never seed demo data in production
-    if (import.meta.env.PROD) {
-      showToast('Seed demo dat je v produkci zakázán', 'error');
-      return;
-    }
-    if (seeding) return;
-    setSeeding(true);
-    try {
-      // Define demo buildings
-      const demoBuildings: Array<Omit<Building, 'id'>> = [
-        {
-          name: 'SVJ Vinohradská 125',
-          address: 'Vinohradská 125, Praha 2',
-          totalUnits: 24,
-          variables: {
-            nazev_budovy: 'SVJ Vinohradská 125',
-            zkraceny_nazev: 'SVJ Vinohradská',
-            plny_nazev: 'Společenství vlastníků jednotek Vinohradská 125',
-            adresa: 'Vinohradská 125, Praha 2',
-            osloveni: 'Vážení vlastníci',
-            predseda: 'Ing. Jan Novák',
-            telefon_predsedy: '+420 777 111 222',
-            email_predsedy: 'predseda@vinohradska125.cz',
-            kontaktni_osoba: 'Správa budovy',
-            banka: 'Česká spořitelna',
-            cislo_uctu: '123456789/0800',
-            web: 'www.vinohradska125.cz'
-          }
-        },
-        {
-          name: 'SVJ Karlínské náměstí',
-          address: 'Karlínské náměstí 12, Praha 8',
-          totalUnits: 18,
-          variables: {
-            nazev_budovy: 'SVJ Karlínské náměstí',
-            zkraceny_nazev: 'SVJ Karlín',
-            plny_nazev: 'Společenství vlastníků jednotek Karlínské náměstí',
-            adresa: 'Karlínské náměstí 12, Praha 8',
-            osloveni: 'Vážení vlastníci',
-            predseda: 'Bc. Marie Svobodová',
-            telefon_predsedy: '+420 777 333 444',
-            email_predsedy: 'predseda@karlin.cz',
-            kontaktni_osoba: 'Správa budovy',
-            banka: 'ČSOB',
-            cislo_uctu: '987654321/0300',
-            web: 'www.svj-karlin.cz'
-          }
-        }
-      ];
+  // Načtení budov pomocí GraphQL
+  const { data, loading, error } = useQuery(GET_BUILDINGS_QUERY);
+  const buildings = data?.buildings || [];
 
-      // Create buildings if not exist
-      const createdBuildings: Building[] = [];
-      // Protože supabaseServices nejsou k dispozici, jen vytvoříme mock objekty pokud neexistují
-      for (const b of demoBuildings) {
-        const exists = buildings.find(x => x.name === b.name);
-        if (exists) {
-          createdBuildings.push(exists);
-        } else {
-          const mock: Building = { id: crypto.randomUUID(), ...b } as Building;
-          createdBuildings.push(mock);
-        }
-      }
-
-      // For each building, create members, observers and one active vote
-  // Ostatní seeding (members, observers, votes) přeskočíme – není základní pro zobrazení
-
-      // Refresh buildings in context
-  if (loadBuildings) await loadBuildings();
-      showToast('Demo data byla připravena', 'success');
-    } catch (err) {
-      console.error(err);
-      showToast('Nepodařilo se připravit demo data', 'error');
-    } finally {
-      setSeeding(false);
-    }
-  };
+  // Seed demo data není v produkci dostupné
 
   if (showBuildingManager) {
     return <BuildingManager onBack={() => setShowBuildingManager(false)} />;

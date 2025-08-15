@@ -2,35 +2,14 @@
 
 import React, { useState } from 'react';
 import { Plus, Search } from 'lucide-react';
-import { useQuery, gql } from '@apollo/client';
-import { useApp } from '../../hooks/useApp'; // Pro selectedBuilding
+import { useQuery } from '@apollo/client';
+import { useApp } from '../../hooks/useApp';
 import { PageHeader } from '../common/PageHeader';
 import { Input } from '../common/Input';
 import { VoteCard } from './VoteCard';
 import { VoteFormView } from './VoteFormView';
 import { VoteDetailView } from './VoteDetailView';
-import type { Vote } from '../../data/mockData';
-
-// GraphQL dotaz pro načtení hlasování
-const GET_VOTES_QUERY = gql`
-  query GetVotes($buildingId: uuid!) {
-    votes(where: { building_id: { _eq: $buildingId } }, order_by: { created_at: desc }) {
-      id
-      title
-      description
-      status
-      created_at
-      start_date
-      end_date
-      # Přidej další pole, která potřebuje VoteCard
-      questions {
-        id
-      }
-      observers
-      member_votes # Potřebujeme pro zjištění počtu hlasujících
-    }
-  }
-`;
+import { GET_VOTES, type Vote } from '../../graphql/votes';
 
 export const VotesListView: React.FC = () => {
   const { selectedBuilding } = useApp();
@@ -40,12 +19,13 @@ export const VotesListView: React.FC = () => {
   const [selectedVote, setSelectedVote] = useState<Vote | null>(null);
   const [editingVote, setEditingVote] = useState<Vote | null>(null);
 
-  const { data, loading, error } = useQuery(GET_VOTES_QUERY, {
+  const { data, loading, error } = useQuery(GET_VOTES, {
     variables: { buildingId: selectedBuilding?.id },
     skip: !selectedBuilding?.id,
   });
 
   const buildingVotes: Vote[] = data?.votes || [];
+  const totalMembers = data?.members_aggregate?.aggregate?.count || 0;
 
   const filteredVotes = buildingVotes.filter(vote => {
     const matchesSearch =
@@ -135,6 +115,7 @@ export const VotesListView: React.FC = () => {
               key={vote.id}
               vote={vote}
               onClick={() => setSelectedVote(vote)}
+              totalMembers={totalMembers}
             />
           ))}
         </div>

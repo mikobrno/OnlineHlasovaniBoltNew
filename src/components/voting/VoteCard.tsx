@@ -27,6 +27,7 @@ const START_VOTE_MUTATION = gql`
 interface VoteCardProps {
   vote: Vote;
   onClick: () => void;
+  totalMembers: number;
 }
 
 export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick }) => {
@@ -53,8 +54,9 @@ export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick }) => {
   };
 
   // Počet hlasujících členů = počet členů s hlasy v member_votes
-  const totalMembers = 100; // TODO: Načíst počet členů z GraphQL
-  const progressWidth = `${(votedMembers / totalMembers) * 100}%`;
+  const progressWidth = totalMembers > 0 
+    ? `${(votedMembers / totalMembers) * 100}%`
+    : '0%';
 
   return (
     <Card className="p-6 hover:shadow-md transition-shadow">

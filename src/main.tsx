@@ -1,28 +1,31 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { NhostProvider } from '@nhost/react';
+import { ApolloProvider } from '@apollo/client';
+import nhost from './lib/nhostClient';
 import App from './App.tsx';
 import './index.css';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
-import { AuthProvider } from './contexts/AuthContext'; // Ponecháme, pokud řeší jen UI stav přihlášení
-import { AppProvider } from './contexts/AppContext';
-import { NhostProvider } from '@nhost/react';
-import { nhost } from './lib/nhostClient';
+import { AuthProvider } from './contexts/AuthContext';
+
+// Získáme Apollo klienta z Nhost instance
+const apolloClient = nhost.graphql.getClient();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <NhostProvider nhost={nhost}>
-        <ThemeProvider>
-          <ToastProvider>
-            <AuthProvider>
-              <AppProvider>
+        <ApolloProvider client={apolloClient}>
+          <ThemeProvider>
+            <ToastProvider>
+              <AuthProvider>
                 <App />
-              </AppProvider>
-            </AuthProvider>
-          </ToastProvider>
-        </ThemeProvider>
+              </AuthProvider>
+            </ToastProvider>
+          </ThemeProvider>
+        </ApolloProvider>
       </NhostProvider>
     </BrowserRouter>
   </StrictMode>

@@ -1,0 +1,15 @@
+.vote-bar {
+  transition: all 0.2s;
+}
+
+.vote-bar-yes {
+  background-color: #22c55e;
+}
+
+.vote-bar-no {
+  background-color: #ef4444;
+}
+
+.vote-bar-abstain {
+  background-color: #9ca3af;
+}

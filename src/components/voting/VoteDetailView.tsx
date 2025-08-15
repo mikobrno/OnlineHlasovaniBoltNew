@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Edit, Mail, Download, FileText, BarChart3, Eye, Play, Paperclip, FileDown } from 'lucide-react';
-import { Vote } from '../../data/mockData';
+import { useMutation, useQuery } from '@apollo/client';
 import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Button } from '../common/Button';
@@ -12,6 +12,19 @@ import { ResultsView } from './ResultsView';
 import { MemberManagementView } from './MemberManagementView';
 import { ObserversView } from './ObserversView';
 import { BallotTemplateModal } from './BallotTemplateModal';
+import { 
+  GET_VOTE_ATTACHMENTS, 
+  type VoteAttachment 
+} from '../../graphql/attachments';
+import { 
+  START_VOTE, 
+  GET_VOTE,
+  type Vote 
+} from '../../graphql/votes';
+import { 
+  GET_MEMBERS,
+  type Member 
+} from '../../graphql/members';
 
 interface VoteDetailViewProps {
   vote: Vote;
@@ -24,35 +37,53 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
   onBack,
   onEdit
 }) => {
-  const { members } = useApp();
+  const { selectedBuilding } = useApp();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'info' | 'members' | 'observers' | 'progress' | 'results' | 'attachments'>('info');
   const [showAttachmentModal, setShowAttachmentModal] = useState(false);
-  const [selectedMemberAttachments, setSelectedMemberAttachments] = useState<{ member: string; attachments: string[]; note?: string } | null>(null);
+  const [selectedAttachment, setSelectedAttachment] = useState<VoteAttachment | null>(null);
   const [showBallotModal, setShowBallotModal] = useState(false);
-  
-  const buildingMembers = members.filter(m => m.buildingId === vote.buildingId);
-  const votedMembers = Object.keys(vote.memberVotes).length;
-  const hasManualVoteAttachments = vote.manualVoteAttachments && Object.keys(vote.manualVoteAttachments).length > 0;
 
-  const handleStartVote = () => {
+  // GraphQL dotazy
+  const { data: membersData } = useQuery(GET_MEMBERS, {
+    variables: { buildingId: selectedBuilding?.id }
+  });
+
+  const { data: attachmentsData } = useQuery(GET_VOTE_ATTACHMENTS, {
+    variables: { voteId: vote.id }
+  });
+
+  // GraphQL mutace
+  const [startVoteMutation] = useMutation(START_VOTE, {
+    variables: { id: vote.id },
+    refetchQueries: [
+      { query: GET_VOTE, variables: { id: vote.id } }
+    ],
+    onError: (error) => {
+      showToast(`Chyba při spuštění hlasování: ${error.message}`, 'error');
+    }
+  });
+  
+  const members = membersData?.members || [];
+  const attachments = attachmentsData?.vote_attachments || [];
+  const votedMembers = Object.keys(vote.member_votes).length;
+  const hasAttachments = attachments.length > 0;
+
+  const handleStartVote = async () => {
     if (window.confirm('Opravdu chcete spustit hlasování? Tato akce je nevratná.')) {
-      // TODO: implementace startVote v kontextu
-      showToast('Spuštění hlasování zatím není implementováno', 'info');
+      try {
+        await startVoteMutation();
+        showToast('Hlasování bylo úspěšně spuštěno', 'success');
+      } catch {
+        // Chyby jsou již zpracovány v onError callbacku mutace
+      }
     }
   };
 
-  const showMemberAttachments = (memberId: string) => {
-    const member = buildingMembers.find(m => m.id === memberId);
-    const attachments = vote.manualVoteAttachments?.[memberId] || [];
-    const note = vote.manualVoteNotes?.[memberId];
-    
-    if (member && (attachments.length > 0 || note)) {
-      setSelectedMemberAttachments({
-        member: member.name,
-        attachments,
-        note
-      });
+  const showMemberAttachments = (attachmentId: string) => {
+    const attachment = attachments.find(a => a.id === attachmentId);
+    if (attachment) {
+      setSelectedAttachment(attachment);
       setShowAttachmentModal(true);
     }
   };
@@ -181,16 +212,20 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
   };
 
   const renderAttachmentsView = () => {
-    if (!vote.manualVoteAttachments) return null;
+    // Seskupit přílohy podle členů
+    const attachmentsByMember = attachments.reduce((acc, attachment) => {
+      const memberId = attachment.member_id;
+      if (!acc[memberId]) {
+        acc[memberId] = {
+          member: attachment.member!,
+          attachments: []
+        };
+      }
+      acc[memberId].attachments.push(attachment);
+      return acc;
+    }, {} as Record<string, { member: Member; attachments: VoteAttachment[] }>);
 
-    const membersWithAttachments = Object.entries(vote.manualVoteAttachments)
-      .filter((entry) => entry[1].length > 0)
-      .map(([memberId, attachments]) => {
-        const member = buildingMembers.find(m => m.id === memberId);
-        const note = vote.manualVoteNotes?.[memberId];
-        return { memberId, member, attachments, note };
-      })
-      .filter(item => item.member);
+    const membersWithAttachments = Object.values(attachmentsByMember);
 
     return (
       <div className="space-y-6">
@@ -212,42 +247,36 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
           </Card>
         ) : (
           <div className="space-y-4">
-            {membersWithAttachments.map(({ memberId, member, attachments, note }) => (
-              <Card key={memberId} className="p-6">
+            {membersWithAttachments.map(({ member, attachments }) => (
+              <Card key={member.id} className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                      {member!.name}
+                      {member.name}
                     </h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Jednotka: {member!.unit} | {attachments.length} příloh
+                      Jednotka: {member.unit} | {attachments.length} příloh
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => showMemberAttachments(memberId)}
-                  >
-                    <Eye className="w-4 h-4 mr-2" />
-                    Zobrazit
-                  </Button>
                 </div>
 
-                {note && (
-                  <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <p className="text-sm text-blue-800 dark:text-blue-200">
-                      <strong>Poznámka:</strong> {note}
-                    </p>
-                  </div>
-                )}
-
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {attachments.map((attachment, index) => (
-                    <div key={index} className="flex items-center space-x-2 p-2 bg-gray-50 dark:bg-gray-800 rounded">
-                      <FileText className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                      <span className="text-sm text-gray-700 dark:text-gray-300 truncate">
-                        {attachment}
-                      </span>
+                  {attachments.map((attachment) => (
+                    <div key={attachment.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <FileText className="w-5 h-5 text-gray-500" />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                          {attachment.file_name}
+                        </span>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="secondary"
+                        onClick={() => showMemberAttachments(attachment.id)}
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        Zobrazit
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -297,40 +326,43 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
       <Modal
         isOpen={showAttachmentModal}
         onClose={() => setShowAttachmentModal(false)}
-        title={`Přílohy - ${selectedMemberAttachments?.member}`}
+        title={`Příloha - ${selectedAttachment?.member?.name}`}
         size="lg"
       >
-        {selectedMemberAttachments && (
+        {selectedAttachment && (
           <div className="space-y-4">
-            {selectedMemberAttachments.note && (
+            <div className="flex items-center justify-between p-3 border dark:border-gray-700 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <FileText className="w-5 h-5 text-gray-500" />
+                <div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">
+                    {selectedAttachment.file_name}
+                  </div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {Math.round(selectedAttachment.file_size / 1024)} KB
+                  </div>
+                </div>
+              </div>
+              <Button size="sm" variant="secondary">
+                <Download className="w-4 h-4 mr-2" />
+                Stáhnout
+              </Button>
+            </div>
+
+            {selectedAttachment.note && (
               <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                 <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Poznámka</h4>
                 <p className="text-blue-800 dark:text-blue-200">
-                  {selectedMemberAttachments.note}
+                  {selectedAttachment.note}
                 </p>
               </div>
             )}
 
-            <div>
-              <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">
-                Přílohy ({selectedMemberAttachments.attachments.length})
-              </h4>
-              <div className="space-y-2">
-                {selectedMemberAttachments.attachments.map((attachment, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <FileText className="w-5 h-5 text-gray-500" />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">
-                        {attachment}
-                      </span>
-                    </div>
-                    <Button size="sm" variant="secondary">
-                      <Download className="w-4 h-4 mr-2" />
-                      Stáhnout
-                    </Button>
-                  </div>
-                ))}
-              </div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">
+              <p>Nahráno: {formatDate(selectedAttachment.created_at)}</p>
+              {selectedAttachment.member && (
+                <p>Člen: {selectedAttachment.member.name} (jednotka {selectedAttachment.member.unit})</p>
+              )}
             </div>
           </div>
         )}

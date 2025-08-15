@@ -6,8 +6,28 @@ import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Card } from '../common/Card';
 import { Modal } from '../common/Modal';
-import { Vote, Question, availableVariables } from '../../data/mockData';
-import { generateId, replaceVariables } from '../../lib/utils';
+import { useMutation, useQuery } from '@apollo/client';
+import { 
+  ADD_VOTE, 
+  UPDATE_VOTE, 
+  type Vote, 
+  type Question,
+  type VoteInput 
+} from '../../graphql/votes';
+import { 
+  GET_EMAIL_TEMPLATES,
+  type EmailTemplate 
+} from '../../graphql/templates';
+import { 
+  GET_MEMBERS,
+  type Member 
+} from '../../graphql/members';
+import { 
+  GET_GLOBAL_VARIABLES,
+  type GlobalVariable 
+} from '../../graphql/globals';
+import { availableVariables } from '../../data/mockData';
+import { replaceVariables, generateUUID } from '../../lib/utils';
 
 interface VoteFormViewProps {
   vote?: Vote | null;
@@ -15,8 +35,21 @@ interface VoteFormViewProps {
 }
 
 export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
-  const { selectedBuilding, addVote, updateVote, templates, members, globalVariables } = useApp();
+  const { selectedBuilding } = useApp();
   const { showToast } = useToast();
+
+  // Načtení šablon
+  const { data: templatesData } = useQuery(GET_EMAIL_TEMPLATES, {
+    variables: { buildingId: selectedBuilding?.id },
+  });
+
+  // Načtení členů pro ukázku proměnných
+  const { data: membersData } = useQuery(GET_MEMBERS, {
+    variables: { buildingId: selectedBuilding?.id },
+  });
+
+  // Načtení globálních proměnných
+  const { data: globalsData } = useQuery(GET_GLOBAL_VARIABLES);
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -130,7 +163,20 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
   const removeAttachment = (index: number) => {
     setAttachments(attachments.filter((_, i) => i !== index));
   };
-  const handleSubmit = (e: React.FormEvent) => {
+  // GraphQL mutace pro přidání/aktualizaci hlasování
+  const [addVoteMutation] = useMutation(ADD_VOTE, {
+    onError: (error) => {
+      showToast(`Chyba při vytváření hlasování: ${error.message}`, 'error');
+    }
+  });
+
+  const [updateVoteMutation] = useMutation(UPDATE_VOTE, {
+    onError: (error) => {
+      showToast(`Chyba při aktualizaci hlasování: ${error.message}`, 'error');
+    }
+  });
+  
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!selectedBuilding) return;
@@ -140,31 +186,33 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
       return;
     }
 
-    const voteData: Vote = {
-      id: vote?.id || generateId(),
+    const voteData: VoteInput = {
+      building_id: selectedBuilding.id,
       title: title.trim(),
       description: description.trim(),
-      buildingId: selectedBuilding.id,
       status: 'draft', // Vždy se ukládá jako návrh
       questions: questions.filter(q => q.text.trim()),
-      createdAt: vote?.createdAt || new Date().toISOString(),
-      startDate: startDate ? new Date(startDate).toISOString() : undefined,
-      endDate: endDate ? new Date(endDate).toISOString() : undefined,
-      attachments: attachments.length > 0 ? attachments : undefined,
-      memberVotes: vote?.memberVotes || {},
-      memberRepresentatives: vote?.memberRepresentatives || {},
+      start_date: startDate ? new Date(startDate).toISOString() : undefined,
+      end_date: endDate ? new Date(endDate).toISOString() : undefined,
       observers: observers.length > 0 ? observers : undefined
     };
 
-    if (vote) {
-      updateVote(voteData);
-      showToast('Hlasování bylo aktualizováno', 'success');
-    } else {
-      addVote(voteData);
-      showToast('Hlasování bylo vytvořeno', 'success');
+    try {
+      if (vote) {
+        await updateVoteMutation({
+          variables: { id: vote.id, vote: voteData }
+        });
+        showToast('Hlasování bylo aktualizováno', 'success');
+      } else {
+        await addVoteMutation({
+          variables: { vote: voteData }
+        });
+        showToast('Hlasování bylo vytvořeno', 'success');
+      }
+      onBack();
+    } catch {
+      // Chyby jsou již zpracovány v onError callbacku mutací
     }
-    
-    onBack();
   };
 
   const insertVariable = (variableName: string) => {
@@ -205,19 +253,22 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
     }
   };
 
-  const buildingTemplates = templates.filter(t => 
-    t.isGlobal || t.buildingId === selectedBuilding?.id
-  );
+  const templates = templatesData?.email_templates || [];
 
   const getTemplatePreview = (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
-    const sampleMember = members.find(m => m.buildingId === selectedBuilding?.id);
+    const sampleMember = membersData?.members?.[0];
+    const globalVars = globalsData?.global_variables || [];
     
     if (!template || !sampleMember || !selectedBuilding) return { subject: '', body: '' };
+
+    const globalVarsObject = Object.fromEntries(
+      globalVars.map(v => [v.name, v.value])
+    );
     
     return {
-      subject: replaceVariables(template.subject, globalVariables, selectedBuilding, sampleMember),
-      body: replaceVariables(template.body, globalVariables, selectedBuilding, sampleMember)
+      subject: replaceVariables(template.subject, globalVarsObject, selectedBuilding, sampleMember),
+      body: replaceVariables(template.body, globalVarsObject, selectedBuilding, sampleMember)
     };
   };
 

@@ -1,25 +1,49 @@
 import React, { useState } from 'react';
 import { Paperclip, FileText } from 'lucide-react';
-import { Vote } from '../../data/mockData';
+import { useQuery } from '@apollo/client';
 import { useApp } from '../../hooks/useApp';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { calculateQuorum } from '../../lib/utils';
+import { 
+  GET_MEMBERS,
+  type Member 
+} from '../../graphql/members';
+import {
+  GET_VOTE_ATTACHMENTS,
+  type VoteAttachment
+} from '../../graphql/attachments';
+import {
+  type Vote,
+  type Question,
+  type VoteQuestionAnswer
+} from '../../graphql/votes';
 
 interface VotingProgressViewProps {
   vote: Vote;
 }
 
 export const VotingProgressView: React.FC<VotingProgressViewProps> = ({ vote }) => {
-  const { members } = useApp();
+  const { selectedBuilding } = useApp();
   const [showIndividual, setShowIndividual] = useState(false);
-  
-  const buildingMembers = members.filter(m => m.buildingId === vote.buildingId);
-  const totalWeight = buildingMembers.reduce((sum, member) => sum + member.voteWeight, 0);
-  const votedMembers = Object.keys(vote.memberVotes);
+
+  // Načtení členů a jejich váhy hlasů
+  const { data: membersData } = useQuery(GET_MEMBERS, {
+    variables: { buildingId: selectedBuilding?.id }
+  });
+
+  // Načtení příloh pro ruční hlasy
+  const { data: attachmentsData } = useQuery(GET_VOTE_ATTACHMENTS, {
+    variables: { voteId: vote.id }
+  });
+
+  const members = membersData?.members || [];
+  const attachments = attachmentsData?.vote_attachments || [];
+  const totalWeight = members.reduce((sum, member) => sum + member.vote_weight, 0);
+  const votedMembers = Object.keys(vote.member_votes);
   const votedWeight = votedMembers.reduce((sum, memberId) => {
-    const member = buildingMembers.find(m => m.id === memberId);
-    return sum + (member?.voteWeight || 0);
+    const member = members.find(m => m.id === memberId);
+    return sum + (member?.vote_weight || 0);
   }, 0);
 
   const getQuestionResults = (questionId: string) => {
@@ -29,9 +53,9 @@ export const VotingProgressView: React.FC<VotingProgressViewProps> = ({ vote }) 
     let yes = 0, no = 0, abstain = 0;
     
     votedMembers.forEach(memberId => {
-      const member = buildingMembers.find(m => m.id === memberId);
-      const memberVote = vote.memberVotes[memberId]?.[questionId];
-      const weight = member?.voteWeight || 0;
+      const member = members.find(m => m.id === memberId);
+      const memberVote = vote.member_votes[memberId]?.[questionId]?.vote;
+      const weight = member?.vote_weight || 0;
       
       if (memberVote === 'yes') yes += weight;
       else if (memberVote === 'no') no += weight;
@@ -82,8 +106,9 @@ export const VotingProgressView: React.FC<VotingProgressViewProps> = ({ vote }) 
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 {buildingMembers.map((member) => {
                   const hasVoted = votedMembers.includes(member.id);
-                  const hasAttachments = vote.manualVoteAttachments?.[member.id]?.length > 0;
-                  const hasNote = vote.manualVoteNotes?.[member.id];
+                  const memberAttachments = attachments.filter(a => a.member_id === member.id);
+                  const hasAttachments = memberAttachments.length > 0;
+                  const hasNote = memberAttachments.some(a => a.note);
                   return (
                     <tr key={member.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
