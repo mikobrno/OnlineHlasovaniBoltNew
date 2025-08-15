@@ -45,11 +45,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [state, dispatch] = useReducer(appReducer, initialState);
     const nhost = useNhostClient(); // Získáme Nhost klienta
 
-    // Načítání dat z Nhost databáze s fallback na mock
+    // Načítání dat z Nhost databáze
     useEffect(() => {
         const fetchBuildings = async () => {
             try {
-                // Pokusíme se načíst z Nhost
                 const { data, error } = await nhost.graphql.request(`
                     query GetBuildings {
                         buildings {
@@ -57,6 +56,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                             name
                             address
                             total_units
+                            variables
                             created_at
                             updated_at
                         }
@@ -64,27 +64,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 `);
                 
                 if (error) {
-                    console.warn('Nhost error, using empty state:', error);
-                    // Místo chyby použijeme prázdný seznam - uživatel může přidat budovy
-                    dispatch({ type: 'SET_BUILDINGS', payload: [] });
+                    console.error('GraphQL error:', error);
+                    const errorMessage = Array.isArray(error) ? error[0]?.message : error.message;
+                    dispatch({ type: 'SET_ERROR', payload: `Databázová chyba: ${errorMessage}` });
                     return;
                 }
                 
                 if (data && data.buildings) {
-                    dispatch({ type: 'SET_BUILDINGS', payload: data.buildings });
+                    // Transformujeme databázové objekty na Building typy
+                    const buildings: Building[] = data.buildings.map((b: any) => ({
+                        id: b.id,
+                        name: b.name,
+                        address: b.address,
+                        totalUnits: b.total_units,
+                        variables: b.variables || {},
+                        created_at: b.created_at,
+                        updated_at: b.updated_at
+                    }));
+                    dispatch({ type: 'SET_BUILDINGS', payload: buildings });
                 } else {
                     dispatch({ type: 'SET_BUILDINGS', payload: [] });
                 }
             } catch (err) {
-                console.warn('Nhost connection failed, using empty state:', err);
-                // Fallback na prázdný seznam
-                dispatch({ type: 'SET_BUILDINGS', payload: [] });
+                console.error('Network error:', err);
+                dispatch({ type: 'SET_ERROR', payload: 'Chyba připojení k databázi' });
             }
         };
-        
-        // Malé zpoždění pro lepší UX
-        const timer = setTimeout(fetchBuildings, 100);
-        return () => clearTimeout(timer);
+        fetchBuildings();
     }, [nhost]);
 
     const selectBuilding = (building: Building) => {
@@ -94,7 +100,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const addBuilding = async (buildingData: { name: string; address: string; totalUnits: number }) => {
         try {
-            // Pokus o přidání do Nhost
+            // Přidání do Nhost databáze
             const { data, error } = await nhost.graphql.request(`
                 mutation InsertBuilding($name: String!, $address: String!, $total_units: Int!) {
                     insert_buildings_one(object: {
@@ -106,6 +112,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         name
                         address
                         total_units
+                        variables
                         created_at
                         updated_at
                     }
@@ -116,40 +123,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 total_units: buildingData.totalUnits
             });
 
-            if (error || !data?.insert_buildings_one) {
-                console.warn('Nhost unavailable, creating locally:', error);
-                // Fallback na lokální řešení
-                const newBuilding = {
-                    id: Date.now().toString(),
-                    name: buildingData.name,
-                    address: buildingData.address,
-                    total_units: buildingData.totalUnits,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                };
-                
-                dispatch({ type: 'ADD_BUILDING', payload: newBuilding });
-                return newBuilding;
+            if (error) {
+                console.error('GraphQL error:', error);
+                const errorMessage = Array.isArray(error) ? error[0]?.message : error.message;
+                throw new Error(`Chyba při ukládání budovy: ${errorMessage}`);
             }
 
             if (data && data.insert_buildings_one) {
-                dispatch({ type: 'ADD_BUILDING', payload: data.insert_buildings_one });
-                return data.insert_buildings_one;
+                // Transformujeme databázový objekt na Building typ
+                const building: Building = {
+                    id: data.insert_buildings_one.id,
+                    name: data.insert_buildings_one.name,
+                    address: data.insert_buildings_one.address,
+                    totalUnits: data.insert_buildings_one.total_units,
+                    variables: data.insert_buildings_one.variables || {},
+                    created_at: data.insert_buildings_one.created_at,
+                    updated_at: data.insert_buildings_one.updated_at
+                };
+                
+                dispatch({ type: 'ADD_BUILDING', payload: building });
+                return building;
             }
-        } catch (err) {
-            console.warn('Database error, creating locally:', err);
-            // Fallback na lokální řešení při chybě
-            const newBuilding = {
-                id: Date.now().toString(),
-                name: buildingData.name,
-                address: buildingData.address,
-                total_units: buildingData.totalUnits,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            };
             
-            dispatch({ type: 'ADD_BUILDING', payload: newBuilding });
-            return newBuilding;
+            throw new Error('Nepodařilo se přidat budovu');
+        } catch (err) {
+            console.error('Error adding building:', err);
+            throw err;
         }
     };
 

@@ -105,6 +105,15 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+-- Smazání starých triggerů (pokud existují) a vytvoření nových
+DROP TRIGGER IF EXISTS update_buildings_updated_at ON buildings;
+DROP TRIGGER IF EXISTS update_members_updated_at ON members;
+DROP TRIGGER IF EXISTS update_votes_updated_at ON votes;
+DROP TRIGGER IF EXISTS update_email_templates_updated_at ON email_templates;
+DROP TRIGGER IF EXISTS update_global_variables_updated_at ON global_variables;
+DROP TRIGGER IF EXISTS update_building_variables_updated_at ON building_variables;
+DROP TRIGGER IF EXISTS update_observers_updated_at ON observers;
+
 CREATE TRIGGER update_buildings_updated_at BEFORE UPDATE ON buildings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_members_updated_at BEFORE UPDATE ON members FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_votes_updated_at BEFORE UPDATE ON votes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
