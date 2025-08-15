@@ -1,17 +1,50 @@
 import React, { useState } from 'react';
 import { Plus, Edit, Trash2, ArrowLeft } from 'lucide-react';
-import { useApp } from '../../contexts/AppContextCompat';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { BuildingEditor } from './BuildingEditor';
-import { Building } from '../../data/mockData';
+import { useQuery, useMutation } from '@apollo/client';
+import { gql } from '@apollo/client';
+import { LoadingSpinner } from '../common/LoadingSpinner';
+import { useToast } from '../../contexts/ToastContext';
+
+// GraphQL dotazy
+const GET_BUILDINGS = gql`
+  query GetBuildings {
+    buildings {
+      id
+      name
+      address
+      total_units
+    }
+  }
+`;
+
+const DELETE_BUILDING = gql`
+  mutation DeleteBuilding($id: uuid!) {
+    delete_buildings_by_pk(id: $id) {
+      id
+    }
+  }
+`;
+
+interface Building {
+  id: string;
+  name: string;
+  address: string;
+  total_units: number;
+}
 
 interface BuildingManagerProps {
   onBack?: () => void;
 }
 
 export const BuildingManager: React.FC<BuildingManagerProps> = ({ onBack }) => {
-  const { buildings, deleteBuilding } = useApp();
+  const { showToast } = useToast();
+  const { data, loading, error } = useQuery(GET_BUILDINGS);
+  const [deleteBuildingMutation] = useMutation(DELETE_BUILDING);
+  
+  const { data, loading, error } = useQuery(GET_BUILDINGS);
   const [showEditor, setShowEditor] = useState(false);
   const [editingBuilding, setEditingBuilding] = useState<Building | null>(null);
 
@@ -20,11 +53,34 @@ export const BuildingManager: React.FC<BuildingManagerProps> = ({ onBack }) => {
     setShowEditor(true);
   };
 
-  const handleDelete = (building: Building) => {
+  const handleDelete = async (building: Building) => {
     if (window.confirm(`Opravdu chcete smazat budovu "${building.name}"? Tato akce smaže i všechny související členy a hlasování.`)) {
-      deleteBuilding(building.id);
+      try {
+        await deleteBuildingMutation({
+          variables: { id: building.id },
+          refetchQueries: [{ query: GET_BUILDINGS }]
+        });
+        showToast('Budova byla úspěšně smazána', 'success');
+      } catch (err) {
+        console.error('Chyba při mazání budovy:', err);
+        showToast('Nepodařilo se smazat budovu', 'error');
+      }
     }
   };
+
+  const buildings = data?.buildings || [];
+
+  if (loading) {
+    return <div className="flex justify-center items-center p-8"><LoadingSpinner /></div>;
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 text-center text-red-600">
+        Chyba při načítání budov: {error.message}
+      </div>
+    );
+  }
 
   const closeEditor = () => {
     setShowEditor(false);

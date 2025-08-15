@@ -5,22 +5,22 @@ import App from './App.tsx';
 import './index.css';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
-import { SupabaseAuthProvider } from './contexts/SupabaseAuthContext';
-import { SupabaseAppProvider } from './contexts/SupabaseAppContext';
+import { AuthProvider } from './contexts/AuthContext'; // Ponecháme, pokud řeší jen UI stav přihlášení
+import { NhostProvider } from '@nhost/react';
+import { nhost } from './lib/nhostClient';
 
-// POUZE SUPABASE - žádné mock data!
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <ThemeProvider>
-        <ToastProvider>
-          <SupabaseAuthProvider>
-            <SupabaseAppProvider>
+      <NhostProvider nhost={nhost}>
+        <ThemeProvider>
+          <ToastProvider>
+            <AuthProvider>
               <App />
-            </SupabaseAppProvider>
-          </SupabaseAuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </NhostProvider>
     </BrowserRouter>
   </StrictMode>
 );

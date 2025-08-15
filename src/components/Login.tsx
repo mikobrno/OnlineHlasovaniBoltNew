@@ -1,22 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Shield, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { Button } from './common/Button';
 import { Input } from './common/Input';
 import { Card } from './common/Card';
 import { useToast } from '../contexts/ToastContext';
+import { useSignInEmailPassword } from '@nhost/react';
+import { useNavigate } from 'react-router-dom';
 
-interface LoginProps {
-  onLogin: (credentials: { email: string; password: string }) => void;
-  isLoading?: boolean;
-}
+export const Login: React.FC = () => {
+  const navigate = useNavigate();
+  const { signInEmailPassword, isLoading, isSuccess, isError, error } = useSignInEmailPassword();
 
-export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false }) => {
+  useEffect(() => {
+    if (isSuccess) {
+      navigate('/');
+    }
+  }, [isSuccess, navigate]);
   const [email, setEmail] = useState('admin@onlinesprava.cz');
-  const [password, setPassword] = useState('admin123');
+  const [password, setPassword] = useState('admin123456');
   const [showPassword, setShowPassword] = useState(false);
   const { showToast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email.trim() || !password.trim()) {
@@ -24,7 +29,14 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false }) => {
       return;
     }
 
-    onLogin({ email: email.trim(), password });
+    const { isSuccess, isError, error } = await signInEmailPassword(email.trim(), password);
+    
+    if (isSuccess) {
+      showToast('Přihlášení úspěšné!', 'success');
+      navigate('/');
+    } else if (isError) {
+      showToast(error?.message || 'Chyba přihlášení', 'error');
+    }
   };
 
   return (
@@ -109,8 +121,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading = false }) => {
             Testovací účty:
           </h4>
           <div className="text-xs text-blue-800 dark:text-blue-200 space-y-1">
-            <p><strong>Admin:</strong> admin@onlinesprava.cz / admin123</p>
-            <p><strong>Správce:</strong> spravce@budova1.cz / spravce123</p>
+            <p><strong>Admin:</strong> admin@onlinesprava.cz / admin123456</p>
+            <p><strong>Správce:</strong> spravce@budova1.cz / spravce123456</p>
           </div>
         </div>
 
