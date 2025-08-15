@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Shield, CheckCircle, AlertCircle, Vote as VoteIcon, Send } from 'lucide-react';
-import { useApp } from '../../contexts/AppContextCompat';
+import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
@@ -44,7 +44,7 @@ export const VotingPage: React.FC = () => {
 
   const vote = votingToken ? votes.find(v => v.id === votingToken.voteId) : null;
   const member = votingToken ? members.find(m => m.id === votingToken.memberId) : null;
-  const building = vote ? buildings.find(b => b.id === vote.building_id) : null;
+  const building = vote ? buildings.find(b => b.id === vote.buildingId) : null;
 
   const sendSMSCode = async () => {
     if (!votingToken || !member || !member.phone) {
@@ -62,7 +62,7 @@ export const VotingPage: React.FC = () => {
       } else {
         showToast(`Chyba při odesílání SMS: ${smsResult.message}`, 'error');
       }
-    } catch (error) {
+    } catch {
       showToast('Chyba při odesílání SMS', 'error');
     } finally {
       setIsSendingSMS(false);
@@ -111,7 +111,7 @@ export const VotingPage: React.FC = () => {
       
       setHasVoted(true);
       showToast('Váš hlas byl úspěšně zaznamenán', 'success');
-    } catch (error) {
+    } catch {
       showToast('Chyba při odesílání hlasu', 'error');
     } finally {
       setIsSubmitting(false);

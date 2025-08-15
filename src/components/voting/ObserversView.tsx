@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Mail, Trash2, Eye } from 'lucide-react';
 import { Vote, Observer } from '../../data/mockData';
-import { useApp } from '../../contexts/AppContextCompat';
+import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
@@ -15,7 +15,7 @@ interface ObserversViewProps {
 }
 
 export const ObserversView: React.FC<ObserversViewProps> = ({ vote }) => {
-  const { observers, selectedBuilding, addObserver, deleteObserver, addVoteObserver, removeVoteObserver } = useApp();
+  const { observers, selectedBuilding } = useApp();
   const { showToast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newObserver, setNewObserver] = useState({ name: '', email: '' });
@@ -39,28 +39,25 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote }) => {
       createdAt: new Date().toISOString()
     };
 
-    addObserver(observer);
-    addVoteObserver(vote.id, observer.id);
+  // TODO addObserver & addVoteObserver implement
     setNewObserver({ name: '', email: '' });
     setShowAddModal(false);
-    showToast('Pozorovatel byl přidán', 'success');
+  showToast('Demo: Pozorovatel by byl přidán', 'info');
   };
 
   const handleAddExistingObserver = (observerId: string) => {
-    addVoteObserver(vote.id, observerId);
-    showToast('Pozorovatel byl přidán k hlasování', 'success');
+    // TODO addVoteObserver implement
+    showToast('Demo: Pozorovatel by byl přidán k hlasování', 'info');
   };
 
   const handleRemoveObserver = (observerId: string) => {
-    removeVoteObserver(vote.id, observerId);
-    showToast('Pozorovatel byl odebrán z hlasování', 'success');
+    // TODO removeVoteObserver implement
+    showToast('Demo: Pozorovatel by byl odebrán z hlasování', 'info');
   };
 
   const handleDeleteObserver = (observer: Observer) => {
-    if (window.confirm(`Opravdu chcete smazat pozorovatele ${observer.name}?`)) {
-      removeVoteObserver(vote.id, observer.id);
-      deleteObserver(observer.id);
-      showToast('Pozorovatel byl smazán', 'success');
+    if (window.confirm(`(Demo) Smazat pozorovatele ${observer.name}?`)) {
+      showToast('Demo: Pozorovatel by byl smazán', 'info');
     }
   };
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { Mail, Wand2, Send, CheckCircle, AlertCircle } from 'lucide-react';
+import { Wand2, Send, CheckCircle, AlertCircle } from 'lucide-react';
 import { Vote } from '../../data/mockData';
-import { useApp } from '../../contexts/AppContextCompat';
+import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
@@ -33,7 +33,7 @@ export const SendMinutesModal: React.FC<SendMinutesModalProps> = ({
     observers.find(o => o.id === id)
   ).filter(Boolean);
   
-  const allRecipients = [...buildingMembers, ...voteObservers];
+  const allRecipients = [...buildingMembers, ...voteObservers] as Array<typeof buildingMembers[number]>; // zúžení typu
   
   const availableTemplates = templates.filter(t => 
     t.isGlobal || t.buildingId === selectedBuilding?.id
@@ -84,41 +84,7 @@ export const SendMinutesModal: React.FC<SendMinutesModalProps> = ({
         };
       });
 
-      const prompt = `
-Vygeneruj formální zápis ze shromáždění vlastníků jednotek (SVJ) v českém jazyce na základě následujících dat:
-
-INFORMACE O HLASOVÁNÍ:
-- Název: ${vote.title}
-- Popis: ${vote.description}
-- Budova: ${selectedBuilding?.name || ''}
-- Adresa: ${selectedBuilding?.address || ''}
-- Datum ukončení: ${vote.endDate ? new Date(vote.endDate).toLocaleDateString('cs-CZ') : ''}
-
-ÚČAST:
-- Celkem členů: ${buildingMembers.length}
-- Hlasovalo: ${votedMembers.length}
-- Účast: ${Math.round((votedMembers.length / buildingMembers.length) * 100)}%
-- Celková váha hlasů: ${totalWeight.toFixed(1)}
-
-VÝSLEDKY HLASOVÁNÍ:
-${resultsData.map(result => `
-Otázka ${result.index}: ${result.text}
-- Ano: ${result.yes.toFixed(1)} hlasů
-- Ne: ${result.no.toFixed(1)} hlasů  
-- Zdržel se: ${result.abstain.toFixed(1)} hlasů
-- Potřebné kvórum: ${result.requiredQuorum.toFixed(1)} hlasů
-- Výsledek: ${result.approved ? 'SCHVÁLENO' : 'ZAMÍTNUTO'}
-`).join('')}
-
-Vygeneruj strukturovaný zápis ve formátu:
-1. Úvodní část s názvem, datem a místem
-2. Seznam přítomných/hlasujících
-3. Program jednání
-4. Projednávané body s výsledky hlasování
-5. Závěr a podpisy
-
-Použij formální jazyk odpovídající právním předpisům ČR pro SVJ/BD.
-`;
+      const prompt = `\nVygeneruj formální zápis ze shromáždění vlastníků jednotek (SVJ) v českém jazyce na základě následujících dat:\n\nINFORMACE O HLASOVÁNÍ:\n- Název: ${vote.title}\n- Popis: ${vote.description}\n- Budova: ${selectedBuilding?.name || ''}\n- Adresa: ${selectedBuilding?.address || ''}\n- Datum ukončení: ${vote.endDate ? new Date(vote.endDate).toLocaleDateString('cs-CZ') : ''}\n\nÚČAST:\n- Celkem členů: ${buildingMembers.length}\n- Hlasovalo: ${votedMembers.length}\n- Účast: ${Math.round((votedMembers.length / buildingMembers.length) * 100)}%\n- Celková váha hlasů: ${totalWeight.toFixed(1)}\n\nVÝSLEDKY HLASOVÁNÍ:\n${resultsData.map(result => `\nOtázka ${result.index}: ${result.text}\n- Ano: ${result.yes.toFixed(1)} hlasů\n- Ne: ${result.no.toFixed(1)} hlasů  \n- Zdržel se: ${result.abstain.toFixed(1)} hlasů\n- Potřebné kvórum: ${result.requiredQuorum.toFixed(1)} hlasů\n- Výsledek: ${result.approved ? 'SCHVÁLENO' : 'ZAMÍTNUTO'}\n`).join('')}\n\nVygeneruj strukturovaný zápis ve formátu:\n1. Úvodní část s názvem, datem a místem\n2. Seznam přítomných/hlasujících\n3. Program jednání\n4. Projednávané body s výsledky hlasování\n5. Závěr a podpisy\n\nPoužij formální jazyk odpovídající právním předpisům ČR pro SVJ/BD.\n`;
 
       const result = await model.generateContent(prompt);
       const response = await result.response;
@@ -135,7 +101,7 @@ Použij formální jazyk odpovídající právním předpisům ČR pro SVJ/BD.
   };
 
   const sendMinutesToRecipient = async (recipientId: string): Promise<boolean> => {
-    const recipient = allRecipients.find(r => r.id === recipientId);
+    const recipient = allRecipients.find(r => r && r.id === recipientId);
     if (!recipient) return false;
 
     setSendingStatus(prev => ({ ...prev, [recipientId]: 'sending' }));
@@ -150,26 +116,25 @@ Použij formální jazyk odpovídající právním předpisům ČR pro SVJ/BD.
         zapis_z_hlasovani: generatedMinutes
       };
 
-      const emailSubject = replaceVariables(
-        template.subject, 
-        globalVariables, 
-        selectedBuilding!, 
-        'email' in recipient ? recipient : undefined, 
-        vote, 
+      // Placeholder validace proměnných (výsledek nevyužíváme)
+      void replaceVariables(
+        template.subject,
+        globalVariables,
+        selectedBuilding!,
+        'unit' in recipient ? recipient : undefined,
+        vote,
+        customVariables
+      );
+      void replaceVariables(
+        template.body,
+        globalVariables,
+        selectedBuilding!,
+        'unit' in recipient ? recipient : undefined,
+        vote,
         customVariables
       );
 
-      const emailBody = replaceVariables(
-        template.body, 
-        globalVariables, 
-        selectedBuilding!, 
-        'email' in recipient ? recipient : undefined, 
-        vote, 
-        customVariables
-      );
-
-      // Simulate email sending
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       setSendingStatus(prev => ({ ...prev, [recipientId]: 'sent' }));
       return true;
@@ -195,24 +160,21 @@ Použij formální jazyk odpovídající právním předpisům ČR pro SVJ/BD.
     let successCount = 0;
     let errorCount = 0;
 
-    // Reset status
     const initialStatus: Record<string, 'pending' | 'sending' | 'sent' | 'error'> = {};
     allRecipients.forEach(recipient => {
-      initialStatus[recipient.id] = 'pending';
+      if (recipient) initialStatus[recipient.id] = 'pending';
     });
     setSendingStatus(initialStatus);
 
-    // Send emails sequentially
     for (const recipient of allRecipients) {
+      if (!recipient) continue;
       const success = await sendMinutesToRecipient(recipient.id);
       if (success) {
         successCount++;
       } else {
         errorCount++;
       }
-      
-      // Small delay between sends
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
 
     setIsSending(false);
@@ -314,6 +276,7 @@ Použij formální jazyk odpovídající právním předpisům ČR pro SVJ/BD.
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 disabled={isSending}
+                title="E-mailová šablona"
               >
                 <option value="">Vyberte šablonu</option>
                 {availableTemplates.map((template) => (
@@ -344,6 +307,7 @@ Použij formální jazyk odpovídající právním předpisům ČR pro SVJ/BD.
 
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {allRecipients.map((recipient) => {
+                  if (!recipient) return null;
                   const status = sendingStatus[recipient.id] || 'pending';
                   const isObserver = !('unit' in recipient);
                   

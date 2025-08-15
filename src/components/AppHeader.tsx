@@ -1,9 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../contexts/AppContextCompat';
+import { useApp } from '../hooks/useApp';
 import { Building2, Sun, Moon, LogOut, User } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/SupabaseAuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Button } from './common/Button';
 
 export const AppHeader: React.FC = () => {

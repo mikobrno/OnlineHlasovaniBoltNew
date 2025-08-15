@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Upload, X, FileText, Paperclip } from 'lucide-react';
 import { Vote } from '../../data/mockData';
-import { useApp } from '../../contexts/AppContextCompat';
+import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
@@ -54,7 +54,8 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
       return;
     }
 
-    castVote(vote.id, memberId, answers, attachments.length > 0 ? attachments : undefined, note.trim() || undefined, true);
+  // TODO: rozšířit castVote o přílohy a poznámky v nové implementaci
+  castVote(vote.id, memberId, answers);
     showToast(`Hlas za ${member.name} byl zaznamenán`, 'success');
     onClose();
   };

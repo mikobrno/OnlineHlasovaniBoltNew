@@ -1,17 +1,16 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Plus, MapPin, Users, Settings } from 'lucide-react';
-import { useApp } from '../contexts/AppContextCompat';
+import { useApp } from '../hooks/useApp';
 import { Card } from './common/Card';
 import { Button } from './common/Button';
 import { BuildingManager } from './admin/BuildingManager';
 import { BuildingEditor } from './admin/BuildingEditor';
 import { useToast } from '../contexts/ToastContext';
-import { buildingService, memberService, observerService, voteService } from '../lib/supabaseServices';
-import type { Building, Member, Observer, Vote } from '../data/mockData';
+import type { Building } from '../data/mockData';
 
 export const BuildingSelector: React.FC = () => {
-  const { buildings, selectBuilding, loadBuildings } = useApp();
+  const { buildings, selectBuilding, loadBuildings, error, loading } = useApp();
   const [showBuildingManager, setShowBuildingManager] = React.useState(false);
   const [showBuildingEditor, setShowBuildingEditor] = React.useState(false);
   const navigate = useNavigate();
@@ -71,75 +70,22 @@ export const BuildingSelector: React.FC = () => {
 
       // Create buildings if not exist
       const createdBuildings: Building[] = [];
+      // Protože supabaseServices nejsou k dispozici, jen vytvoříme mock objekty pokud neexistují
       for (const b of demoBuildings) {
         const exists = buildings.find(x => x.name === b.name);
         if (exists) {
           createdBuildings.push(exists);
-          continue;
+        } else {
+          const mock: Building = { id: crypto.randomUUID(), ...b } as Building;
+          createdBuildings.push(mock);
         }
-        const nb = await buildingService.create(b);
-        createdBuildings.push(nb);
       }
 
       // For each building, create members, observers and one active vote
-      for (const b of createdBuildings) {
-        // Members
-        const existingMembers = await memberService.getByBuildingId(b.id);
-        if (existingMembers.length < 5) {
-        const basePhone = b.name.includes('Vinohradská') ? '+4206010000' : '+4206020000';
-        const members: Array<Omit<Member, 'id'>> = [
-          { name: 'Jan Novák', email: 'jan.novak+demo@example.com', phone: basePhone + '01', unit: '1.01', voteWeight: 1.0, buildingId: b.id },
-          { name: 'Marie Svobodová', email: 'marie.svobodova+demo@example.com', phone: basePhone + '02', unit: '1.02', voteWeight: 1.2, buildingId: b.id },
-          { name: 'Petr Dvořák', email: 'petr.dvorak+demo@example.com', phone: basePhone + '03', unit: '2.01', voteWeight: 0.8, buildingId: b.id },
-          { name: 'Lucie Procházková', email: 'lucie.prochazkova+demo@example.com', phone: basePhone + '04', unit: '2.02', voteWeight: 1.0, buildingId: b.id },
-          { name: 'Karel Černý', email: 'karel.cerny+demo@example.com', phone: basePhone + '05', unit: '3.01', voteWeight: 1.5, buildingId: b.id },
-          { name: 'Eva Králová', email: 'eva.kralova+demo@example.com', phone: basePhone + '06', unit: '3.02', voteWeight: 1.1, buildingId: b.id },
-          { name: 'Tomáš Pokorný', email: 'tomas.pokorny+demo@example.com', phone: basePhone + '07', unit: '4.01', voteWeight: 0.9, buildingId: b.id },
-          { name: 'Alena Jelínková', email: 'alena.jelinkova+demo@example.com', phone: basePhone + '08', unit: '4.02', voteWeight: 1.3, buildingId: b.id },
-          { name: 'Milan Beneš', email: 'milan.benes+demo@example.com', phone: basePhone + '09', unit: '5.01', voteWeight: 1.0, buildingId: b.id },
-          { name: 'Hana Fialová', email: 'hana.fialova+demo@example.com', phone: basePhone + '10', unit: '5.02', voteWeight: 1.0, buildingId: b.id }
-        ];
-        await memberService.importMembers(members);
-        }
-
-        const existingObservers = await observerService.getByBuildingId(b.id);
-        if (existingObservers.length === 0) {
-          const observers: Array<Omit<Observer, 'id'>> = [
-            { name: 'Ing. Pavel Správce', email: 'spravce+' + (b.id.slice(0, 4)) + '@onlinesprava.cz', buildingId: b.id, createdAt: new Date().toISOString() },
-            { name: 'Bc. Jana Kontrolorka', email: 'kontrolor+' + (b.id.slice(0, 4)) + '@onlinesprava.cz', buildingId: b.id, createdAt: new Date().toISOString() }
-          ];
-          for (const o of observers) {
-            await observerService.create(o);
-          }
-        }
-
-        const existingVotes = await voteService.getByBuildingId(b.id);
-        const hasActive = existingVotes.some(v => v.status === 'active');
-        if (!hasActive) {
-          const now = new Date();
-          const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-          const vote: Omit<Vote, 'id'> = {
-            title: 'Schválení ročního rozpočtu',
-            description: 'Hlasování per rollam o rozpočtu a příspěvcích do fondů.',
-            buildingId: b.id,
-            status: 'active',
-            questions: [
-              { id: 'q1', text: 'Schvalujete navržený rozpočet?', quorumType: 'qualified' },
-              { id: 'q2', text: 'Souhlasíte se zvýšením příspěvků o 5%?', quorumType: 'simple' }
-            ],
-            createdAt: now.toISOString(),
-            startDate: now.toISOString(),
-            endDate: in7.toISOString(),
-            attachments: [],
-            memberVotes: {},
-            observers: []
-          };
-          await voteService.create(vote);
-        }
-      }
+  // Ostatní seeding (members, observers, votes) přeskočíme – není základní pro zobrazení
 
       // Refresh buildings in context
-      await loadBuildings();
+  if (loadBuildings) await loadBuildings();
       showToast('Demo data byla připravena', 'success');
     } catch (err) {
       console.error(err);
@@ -174,6 +120,44 @@ export const BuildingSelector: React.FC = () => {
             Vyberte budovu pro správu hlasování a komunikace s vlastníky
           </p>
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-8 max-w-2xl mx-auto">
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                    Chyba databáze
+                  </h3>
+                  <div className="mt-2 text-sm text-red-700 dark:text-red-300">
+                    <p>{error}</p>
+                    {error.includes('neexistují') && (
+                      <p className="mt-2">
+                        <strong>Řešení:</strong> Spusť SQL schema v Nhost Console - viz soubor <code>NHOST_SETUP.md</code>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="inline-flex items-center space-x-2">
+              <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-gray-600 dark:text-gray-400">Načítám budovy...</span>
+            </div>
+          </div>
+        )}
 
         {/* Buildings Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">

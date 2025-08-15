@@ -1,6 +1,9 @@
+// src/components/members/MembersView.tsx
+
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, ArrowLeft } from 'lucide-react';
+import { Plus, Upload, Search } from 'lucide-react';
 import { useQuery, useMutation, gql } from '@apollo/client';
+import { useApp } from '../../hooks/useApp'; // Tento bude potřeba pro selectedBuilding
 import { useToast } from '../../contexts/ToastContext';
 import { PageHeader } from '../common/PageHeader';
 import { Input } from '../common/Input';
@@ -8,11 +11,12 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { MemberFormModal } from './MemberFormModal';
 import { ImportMembersModal } from './ImportMembersModal';
+import type { Member as MemberType } from '../../data/mockData'; // Používáme Type pro zpětnou kompatibilitu
 
 // GraphQL dotaz pro načtení členů
 const GET_MEMBERS_QUERY = gql`
-  query GetMembers($building_id: uuid!) {
-    members(where: { building_id: { _eq: $building_id } }) {
+  query GetMembers($buildingId: uuid!) {
+    members(where: { building_id: { _eq: $buildingId } }) {
       id
       name
       email
@@ -34,46 +38,18 @@ const DELETE_MEMBER_MUTATION = gql`
   }
 `;
 
-// Typ pro člena
-export interface Member {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  unit: string;
-  vote_weight: number;
-  representative_id?: string;
-  building_id: string;
-}t, { useState } from 'react';
-import { Plus, Upload, Search, Users } from 'lucide-react';
-import { useApp } from '../../contexts/AppContextCompat';
-import { useToast } from '../../contexts/ToastContext';
-import { PageHeader } from '../common/PageHeader';
-import { Input } from '../common/Input';
-import { Card } from '../common/Card';
-import { Button } from '../common/Button';
-import { MemberFormModal } from './MemberFormModal';
-import { ImportMembersModal } from './ImportMembersModal';
-import type { Member as MemberType } from '../../data/mockData';
-
-interface MembersViewProps {
-  selectedBuilding?: {
-    id: string;
-    name: string;
-  };
-}
-
-export const MembersView: React.FC<MembersViewProps> = ({ selectedBuilding }) => {
+export const MembersView: React.FC = () => {
+  const { selectedBuilding } = useApp(); // Získáme info o budově
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editingMember, setEditingMember] = useState<MemberType | null>(null);
 
   // Načtení členů pomocí GraphQL
   const { data, loading, error, refetch } = useQuery(GET_MEMBERS_QUERY, {
-    variables: { building_id: selectedBuilding?.id },
-    skip: !selectedBuilding?.id
+    variables: { buildingId: selectedBuilding?.id },
+    skip: !selectedBuilding?.id, // Přeskočí dotaz, pokud není vybrána budova
   });
 
   // Mutace pro smazání člena
@@ -81,44 +57,34 @@ export const MembersView: React.FC<MembersViewProps> = ({ selectedBuilding }) =>
     refetchQueries: [
       {
         query: GET_MEMBERS_QUERY,
-        variables: { building_id: selectedBuilding?.id }
-      }
-    ]
+        variables: { buildingId: selectedBuilding?.id },
+      },
+    ],
   });
 
-  const members: Member[] = data?.members || [];
+  const members: MemberType[] = data?.members || [];
   
-  const filteredMembers = members.filter((member: Member) =>
+  const filteredMembers = members.filter((member: MemberType) =>
     member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.unit.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleEdit = (member: Member) => {
+  const handleEdit = (member: MemberType) => {
     setEditingMember(member);
     setShowForm(true);
   };
 
-  const handleDelete = (member: Member) => {
+  const handleDelete = (member: MemberType) => {
     if (window.confirm(`Opravdu chcete smazat člena ${member.name}?`)) {
-      deleteMemberMutation({ 
-        variables: { id: member.id }
-      }).then(() => {
-        showToast('Člen byl úspěšně smazán', 'success');
-      }).catch((err) => {
-        showToast(`Chyba při mazání člena: ${err.message}`, 'error');
-      });
+      deleteMemberMutation({ variables: { id: member.id } })
+        .then(() => {
+          showToast('Člen byl úspěšně smazán', 'success');
+        })
+        .catch((err) => {
+          showToast(`Chyba při mazání člena: ${err.message}`, 'error');
+        });
     }
-  };
-
-  const handleSeedMembers = async () => {
-    if (!selectedBuilding) {
-      showToast('Nejprve vyberte budovu', 'error');
-      return;
-    }
-    
-    // TODO: Implementovat přes GraphQL mutaci
-    showToast('Funkce není zatím implementována', 'error');
   };
 
   const closeForm = () => {
@@ -126,6 +92,9 @@ export const MembersView: React.FC<MembersViewProps> = ({ selectedBuilding }) =>
     setEditingMember(null);
     refetch(); // Aktualizace seznamu členů po uzavření formuláře
   };
+
+  if (loading) return <div>Načítám členy...</div>;
+  if (error) return <div>Chyba při načítání členů: {error.message}</div>;
 
   return (
     <div>
@@ -135,7 +104,7 @@ export const MembersView: React.FC<MembersViewProps> = ({ selectedBuilding }) =>
         action={{
           label: 'Nový člen',
           onClick: () => setShowForm(true),
-          icon: <Plus className="w-4 h-4" />
+          icon: <Plus className="w-4 h-4" />,
         }}
       />
 
@@ -153,25 +122,19 @@ export const MembersView: React.FC<MembersViewProps> = ({ selectedBuilding }) =>
           <Upload className="w-4 h-4 mr-2" />
           Import členů
         </Button>
-        <Button variant="secondary" onClick={handleSeedMembers} disabled={!selectedBuilding}>
-          <Users className="w-4 h-4 mr-2" />
-          Naplnit test data
-        </Button>
       </div>
 
       {filteredMembers.length === 0 ? (
         <div className="text-center py-12">
           <div className="text-gray-400 dark:text-gray-500 mb-4">
-            {searchTerm 
-              ? 'Žádní členové nevyhovují filtru'
-              : 'Zatím žádní členové'
-            }
+            {searchTerm ? 'Žádní členové nevyhovují filtru' : 'Zatím žádní členové'}
           </div>
         </div>
       ) : (
         <Card className="p-6">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              {/* Zbytek tabulky zůstává stejný... */}
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -196,8 +159,8 @@ export const MembersView: React.FC<MembersViewProps> = ({ selectedBuilding }) =>
               </thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredMembers.map((member) => {
-                  const representative = member.representative_id 
-                    ? members.find(m => m.id === member.representative_id)
+                  const representative = member.representativeId
+                    ? members.find(m => m.id === member.representativeId)
                     : null;
                     
                   return (
@@ -215,7 +178,7 @@ export const MembersView: React.FC<MembersViewProps> = ({ selectedBuilding }) =>
                         {member.unit}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {member.vote_weight}
+                        {member.voteWeight}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         {representative ? representative.name : '-'}
@@ -248,11 +211,7 @@ export const MembersView: React.FC<MembersViewProps> = ({ selectedBuilding }) =>
       <MemberFormModal
         isOpen={showForm}
         onClose={closeForm}
-        member={editingMember ? {
-          ...editingMember,
-          voteWeight: editingMember.vote_weight,
-          buildingId: editingMember.building_id
-        } : null}
+        member={editingMember}
       />
 
       <ImportMembersModal

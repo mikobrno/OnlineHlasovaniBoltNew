@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Edit, Mail, Download, FileText, BarChart3, Eye, Play, Paperclip, FileDown } from 'lucide-react';
 import { Vote } from '../../data/mockData';
-import { useApp } from '../../contexts/AppContextCompat';
+import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
@@ -24,7 +24,7 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
   onBack,
   onEdit
 }) => {
-  const { members, startVote } = useApp();
+  const { members } = useApp();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'info' | 'members' | 'observers' | 'progress' | 'results' | 'attachments'>('info');
   const [showAttachmentModal, setShowAttachmentModal] = useState(false);
@@ -37,8 +37,8 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
 
   const handleStartVote = () => {
     if (window.confirm('Opravdu chcete spustit hlasování? Tato akce je nevratná.')) {
-      startVote(vote.id);
-      showToast('Hlasování bylo spuštěno', 'success');
+      // TODO: implementace startVote v kontextu
+      showToast('Spuštění hlasování zatím není implementováno', 'info');
     }
   };
 

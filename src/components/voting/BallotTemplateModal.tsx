@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Vote } from '../../data/mockData';
-import { useApp } from '../../contexts/AppContextCompat';
+import { useApp } from '../../hooks/useApp';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { renderDocumentTemplate, defaultBallotTemplate } from '../../lib/documentTemplate';

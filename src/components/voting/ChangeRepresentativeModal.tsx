@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Vote } from '../../data/mockData';
-import { useApp } from '../../contexts/AppContextCompat';
+import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
@@ -18,7 +18,7 @@ export const ChangeRepresentativeModal: React.FC<ChangeRepresentativeModalProps>
   vote,
   memberId
 }) => {
-  const { members, setRepresentative } = useApp();
+  const { members } = useApp();
   const { showToast } = useToast();
   const [selectedRepresentativeId, setSelectedRepresentativeId] = useState<string>('');
 
@@ -36,13 +36,12 @@ export const ChangeRepresentativeModal: React.FC<ChangeRepresentativeModalProps>
   const handleSave = () => {
     if (!member) return;
 
-    setRepresentative(vote.id, memberId, selectedRepresentativeId || undefined);
-    
-    const representativeName = selectedRepresentativeId 
+  // TODO: implementace setRepresentative v kontextu
+  const representativeName = selectedRepresentativeId 
       ? availableRepresentatives.find(m => m.id === selectedRepresentativeId)?.name
       : 'nikdo';
     
-    showToast(`Zástupce pro ${member.name} byl změněn na: ${representativeName}`, 'success');
+  showToast(`(Demo) Zástupce pro ${member.name} by byl změněn na: ${representativeName}`, 'info');
     onClose();
   };
 
@@ -68,6 +67,7 @@ export const ChangeRepresentativeModal: React.FC<ChangeRepresentativeModalProps>
             value={selectedRepresentativeId}
             onChange={(e) => setSelectedRepresentativeId(e.target.value)}
             className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            title="Zástupce pro hlasování"
           >
             <option value="">Žádný zástupce</option>
             {availableRepresentatives.map((rep) => (

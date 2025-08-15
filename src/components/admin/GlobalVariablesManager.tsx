@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import { Save, RotateCcw, Eye, EyeOff, Plus, Trash2, Edit } from 'lucide-react';
-import { useApp } from '../../contexts/AppContextCompat';
+import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Modal } from '../common/Modal';
 import { GlobalVariable } from '../../data/mockData';
-import { generateId } from '../../lib/utils';
 
 export const GlobalVariablesManager: React.FC = () => {
   const { globalVariables, addGlobalVariable, updateGlobalVariable, deleteGlobalVariable } = useApp();
+  // Zaručíme volání – pokud nejsou definované (placeholdery), vytvoříme no-op
+  const safeAdd = addGlobalVariable ?? (async () => {});
+  const safeUpdate = updateGlobalVariable ?? (async () => {});
+  const safeDelete = deleteGlobalVariable ?? (async () => {});
   const { showToast } = useToast();
   const [editedVariables, setEditedVariables] = useState<Record<string, string>>({});
   const [showPreview, setShowPreview] = useState(false);
@@ -46,7 +49,7 @@ export const GlobalVariablesManager: React.FC = () => {
     Object.entries(editedVariables).forEach(([name, value]) => {
       const variable = globalVariables.find(v => v.name === name);
       if (variable && value !== variable.value) {
-        updateGlobalVariable({
+  safeUpdate({
           ...variable,
           value
         });
@@ -95,7 +98,7 @@ export const GlobalVariablesManager: React.FC = () => {
       isEditable: true
     };
 
-    addGlobalVariable(variable);
+  safeAdd(variable);
     setNewVariable({ name: '', description: '', value: '' });
     setShowAddModal(false);
     showToast('Globální proměnná byla přidána', 'success');
@@ -123,7 +126,7 @@ export const GlobalVariablesManager: React.FC = () => {
       value: newVariable.value.trim()
     };
 
-    updateGlobalVariable(updatedVariable);
+  safeUpdate(updatedVariable);
     setEditingVariable(null);
     setNewVariable({ name: '', description: '', value: '' });
     setShowAddModal(false);
@@ -137,7 +140,7 @@ export const GlobalVariablesManager: React.FC = () => {
     }
 
     if (window.confirm(`Opravdu chcete smazat proměnnou "${variable.description}"?`)) {
-      deleteGlobalVariable(variable.name);
+  safeDelete(variable.name);
       showToast('Globální proměnná byla smazána', 'success');
     }
   };
@@ -237,6 +240,8 @@ export const GlobalVariablesManager: React.FC = () => {
                     {variable.isEditable && (
                       <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
                         <button
+                          title="Upravit"
+                          aria-label="Upravit proměnnou"
                           type="button"
                           onClick={() => handleEditVariable(variable)}
                           className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded"
@@ -244,6 +249,8 @@ export const GlobalVariablesManager: React.FC = () => {
                           <Edit className="w-3 h-3 text-blue-600 dark:text-blue-400" />
                         </button>
                         <button
+                          title="Smazat"
+                          aria-label="Smazat proměnnou"
                           type="button"
                           onClick={() => handleDeleteVariable(variable)}
                           className="p-1 hover:bg-red-100 dark:hover:bg-red-900/50 rounded"
@@ -318,11 +325,12 @@ export const GlobalVariablesManager: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Hodnota proměnné
             </label>
-            <textarea
+                      <textarea
+              title="Hodnota proměnné"
               value={newVariable.value}
               onChange={(e) => setNewVariable({ ...newVariable, value: e.target.value })}
               rows={3}
-             className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Hodnota, která se dosadí místo proměnné"
             />
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">

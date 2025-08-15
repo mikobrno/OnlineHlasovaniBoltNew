@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, RotateCcw } from 'lucide-react';
-import { useApp } from '../../contexts/AppContextCompat';
+import { Plus, Edit, Trash2 } from 'lucide-react';
+import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
@@ -10,6 +10,9 @@ import { BuildingVariable } from '../../data/mockData';
 
 export const BuildingVariablesManager: React.FC = () => {
   const { buildingVariables, addBuildingVariable, updateBuildingVariable, deleteBuildingVariable } = useApp();
+  const safeAdd = addBuildingVariable ?? (async () => {});
+  const safeUpdate = updateBuildingVariable ?? (async () => {});
+  const safeDelete = deleteBuildingVariable ?? (async () => {});
   const { showToast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingVariable, setEditingVariable] = useState<BuildingVariable | null>(null);
@@ -30,7 +33,7 @@ export const BuildingVariablesManager: React.FC = () => {
 
     const variableName = newVariable.name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     
-    if (buildingVariables.some(v => v.name === variableName)) {
+  if (buildingVariables.some((v) => v.name === variableName)) {
       showToast('Proměnná s tímto názvem již existuje', 'error');
       return;
     }
@@ -46,7 +49,7 @@ export const BuildingVariablesManager: React.FC = () => {
         : undefined
     };
 
-    addBuildingVariable(variable);
+  safeAdd(variable);
     resetForm();
     setShowAddModal(false);
     showToast('Proměnná budovy byla přidána', 'success');
@@ -82,7 +85,7 @@ export const BuildingVariablesManager: React.FC = () => {
         : undefined
     };
 
-    updateBuildingVariable(updatedVariable);
+  safeUpdate(updatedVariable);
     resetForm();
     setEditingVariable(null);
     setShowAddModal(false);
@@ -91,7 +94,7 @@ export const BuildingVariablesManager: React.FC = () => {
 
   const handleDeleteVariable = (variable: BuildingVariable) => {
     if (window.confirm(`Opravdu chcete smazat proměnnou "${variable.description}"? Tato akce ovlivní všechny budovy.`)) {
-      deleteBuildingVariable(variable.name);
+  safeDelete(variable.name);
       showToast('Proměnná budovy byla smazána', 'success');
     }
   };
@@ -252,8 +255,9 @@ export const BuildingVariablesManager: React.FC = () => {
             </label>
             <select
               value={newVariable.type}
-              onChange={(e) => setNewVariable({ ...newVariable, type: e.target.value as any })}
+              onChange={(e) => setNewVariable({ ...newVariable, type: e.target.value as 'text' | 'textarea' | 'select' })}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              title="Typ pole"
             >
               <option value="text">Textové pole</option>
               <option value="textarea">Dlouhý text (textarea)</option>

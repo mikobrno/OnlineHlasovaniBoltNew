@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, Globe, Building, HelpCircle } from 'lucide-react';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
-import { useApp } from '../../contexts/AppContextCompat';
+import { useApp } from '../../hooks/useApp';
 import { DocumentTemplate } from '../../data/mockData';
 
 export const DocumentTemplateManager: React.FC = () => {

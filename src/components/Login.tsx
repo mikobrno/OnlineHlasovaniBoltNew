@@ -1,21 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Shield, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { Button } from './common/Button';
 import { Input } from './common/Input';
 import { Card } from './common/Card';
 import { useToast } from '../contexts/ToastContext';
-import { useSignInEmailPassword } from '@nhost/react';
-import { useNavigate } from 'react-router-dom';
+interface LoginProps {
+  onLogin: (credentials: { email: string; password: string }) => Promise<void>;
+  isLoading: boolean;
+}
 
-export const Login: React.FC = () => {
-  const navigate = useNavigate();
-  const { signInEmailPassword, isLoading, isSuccess, isError, error } = useSignInEmailPassword();
-
-  useEffect(() => {
-    if (isSuccess) {
-      navigate('/');
-    }
-  }, [isSuccess, navigate]);
+export const Login: React.FC<LoginProps> = ({ onLogin, isLoading }) => {
   const [email, setEmail] = useState('admin@onlinesprava.cz');
   const [password, setPassword] = useState('admin123456');
   const [showPassword, setShowPassword] = useState(false);
@@ -29,13 +23,14 @@ export const Login: React.FC = () => {
       return;
     }
 
-    const { isSuccess, isError, error } = await signInEmailPassword(email.trim(), password);
-    
-    if (isSuccess) {
+    try {
+      await onLogin({
+        email: email.trim(),
+        password: password.trim()
+      });
       showToast('Přihlášení úspěšné!', 'success');
-      navigate('/');
-    } else if (isError) {
-      showToast(error?.message || 'Chyba přihlášení', 'error');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Chyba přihlášení', 'error');
     }
   };
 
