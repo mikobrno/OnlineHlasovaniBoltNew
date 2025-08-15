@@ -1,4 +1,10 @@
-import { EmailTemplate, GlobalVariable, Building, Member, Vote, Observer } from '../data/mockData';
+// Odstraněn import mock dat – definujeme minimální struktury
+export interface EmailTemplate { id: string; name: string; subject: string; body: string; isGlobal?: boolean; is_global?: boolean; customVariables?: unknown }
+export interface GlobalVariable { name: string; value: string }
+interface Building { id: string; name: string; variables?: Record<string,string> }
+interface Member { id: string; name: string; email: string; phone?: string; unit?: string; vote_weight?: number; voteWeight?: number }
+interface Vote { id: string; title: string; description?: string; status: string; start_date?: string; end_date?: string; startDate?: string; endDate?: string; questions: { id: string; text: string }[] }
+interface Observer { id: string; name: string; email: string }
 
 // Systém email šablon s podporou individuálních odkazů a proměnných
 
@@ -110,9 +116,9 @@ export class EmailTemplateService {
     return {
       jmeno_clena: member.name,
       email_clena: member.email,
-      telefon_clena: member.phone || '',
-      jednotka: member.unit,
-      vaha_hlasu: member.voteWeight.toString(),
+  telefon_clena: member.phone || '',
+  jednotka: member.unit || '',
+  vaha_hlasu: String(("voteWeight" in member ? (member as { voteWeight?: number }).voteWeight : undefined) ?? member.vote_weight ?? ''),
       osloveni: `Vážený/á ${member.name}`
     };
   }

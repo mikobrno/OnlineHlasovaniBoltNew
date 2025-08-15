@@ -3,6 +3,26 @@ import { gql } from '@apollo/client';
 // This file is for the VOTES LIST feature.
 // For vote details, see queries.ts and mutations.ts.
 
+// Local TypeScript helper types for inserts (not generated)
+export interface QuestionInput {
+  text: string;
+  quorum_type?: 'simple' | 'qualified' | 'unanimous' | 'custom';
+  custom_quorum_numerator?: number;
+  custom_quorum_denominator?: number;
+}
+
+export interface VoteInput {
+  building_id: string;
+  title: string;
+  description: string;
+  status?: 'draft' | 'active' | 'completed' | 'cancelled' | 'archived';
+  start_date?: string;
+  end_date?: string;
+  observers?: string[];
+  // Hasura nested insert wrapper
+  questions?: { data: QuestionInput[] };
+}
+
 // Fragments
 export const VOTE_LIST_ITEM_FIELDS = gql`
   fragment VoteListItemFields on votes {
@@ -13,11 +33,7 @@ export const VOTE_LIST_ITEM_FIELDS = gql`
     start_date
     end_date
     created_at
-    member_votes_aggregate {
-      aggregate {
-        count
-      }
-    }
+  vote_statistics # JSONB pole ve schématu - lze z něj číst agregace, pokud je trigger naplní
   }
 `;
 

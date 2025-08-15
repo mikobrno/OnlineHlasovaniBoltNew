@@ -1,18 +1,21 @@
-import { createContext, useContext, ReactNode } from 'react';
+import { createContext, ReactNode } from 'react';
 import { useAuthenticationStatus, useUserData, useSignOut } from '@nhost/react';
 import type { User } from '@nhost/nhost-js';
-import { FullPageSpinner } from '../components/common/Spinners';
+import type { SignOutlessHandlerResult } from '@nhost/nhost-js';
+import { FullPageSpinner } from '../components/FullPageSpinner';
 
 // Definujeme typ pro náš kontext
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: User | null;
-  signOut: () => Promise<void>;
+  signOut: () => Promise<SignOutlessHandlerResult>;
 }
 
 // Vytvoříme kontext
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export { AuthContext };
 
 // Vytvoříme Provider komponentu
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -35,13 +38,4 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
-
-// Vytvoříme vlastní hook pro snadné použití kontextu
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 };

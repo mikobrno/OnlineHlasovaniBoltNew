@@ -4,7 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 
 export const Login = () => {
@@ -24,55 +24,68 @@ export const Login = () => {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">Přihlášení</CardTitle>
-          <CardDescription>Zadejte své přihlašovací údaje pro vstup do aplikace.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Input
-                id="email"
-                type="email"
-                placeholder="vas@email.cz"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Input
-                id="password"
-                type="password"
-                placeholder="Heslo"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-            
-            {isError && error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Chyba přihlášení</AlertTitle>
-                <AlertDescription>
-                  {error.message === 'invalid-email-password' 
-                    ? 'Nesprávný email nebo heslo.' 
-                    : 'Něco se pokazilo. Zkuste to prosím znovu.'}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Přihlašuji...' : 'Přihlásit se'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
+      <div className="w-full max-w-xs">
+        <Card className="w-full border border-slate-800 bg-slate-900/80 backdrop-blur-sm shadow-lg">
+          <CardHeader className="space-y-1 pb-4">
+            <CardTitle className="text-xl font-semibold text-center tracking-tight text-white">
+              Online Hlasování
+            </CardTitle>
+            <CardDescription className="text-center text-slate-400 text-xs">
+              Přihlášení
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent className="pt-0">
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Email"
+                  required
+                  value={email}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                  disabled={isLoading}
+                  className="bg-slate-800/60 border-slate-700 focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              <div>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Heslo"
+                  required
+                  value={password}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+                  disabled={isLoading}
+                  className="bg-slate-800/60 border-slate-700 focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                />
+              </div>
+              {isError && error && (
+                <Alert variant="destructive" className="border-red-700 bg-red-900/30 text-sm">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    {error.message === 'invalid-email-password'
+                      ? 'Nesprávný email nebo heslo.'
+                      : 'Chyba přihlášení. Zkuste znovu.'}
+                  </AlertDescription>
+                </Alert>
+              )}
+              <Button type="submit" className="w-full h-9 text-sm font-medium bg-indigo-600 hover:bg-indigo-500" disabled={isLoading}>
+                {isLoading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/70 border-t-transparent" />
+                    <span>Přihlašuji…</span>
+                  </div>
+                ) : (
+                  'Přihlásit'
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

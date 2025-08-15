@@ -27,6 +27,19 @@ Moderní webová aplikace pro správu hlasování ve společenstvích vlastník�
 
 ## 🛠️ Lokální vývoj
 
+### ❌ Žádná MOCK data
+
+V aktuální verzi jsou veškeré zbytky původních `mockData` odstraněny. Aplikace musí vždy číst a zapisovat pouze do skutečné databáze (Supabase / Nhost).
+
+Zásady:
+- Nikdy nepřidávat zpět soubor `mockData.ts` ani podobné statické kolekce.
+- Helper funkce (`replaceVariables`, renderer dokumentů, e‑mail šablony) používají nyní minimalistické rozhraní a očekávají data přivezená z GraphQL / REST.
+- Při potřebě „seed“ dat používejte SQL skripty v `database/seeds` nebo oficiální migrační skripty.
+- Pokud komponenta potřebuje data, vždy je načtěte přes GraphQL dotaz / REST volání – neimportujte statické objekty.
+
+Audit: Pokud narazíte na import `../data/mockData`, jde o relikt – odstraňte jej a nahraďte typy z `src/types` nebo lokálními minimalistickými typy.
+
+
 ### Předpoklady
 
 - Node.js 18+

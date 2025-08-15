@@ -1,10 +1,14 @@
 // Jednoduchý renderer dokumentových šablon s podporou proměnných a bloku otázek
-import { Building, Member, Vote } from '../data/mockData';
+// Odstraněn import mock dat – definujeme minimalistické typy potřebné pro šablonu
+interface SimpleQuestion { id: string; text: string }
+interface SimpleVote { id: string; title: string; questions: SimpleQuestion[] }
+interface SimpleBuilding { id: string; name: string }
+interface SimpleMember { id: string; name: string }
 
 export interface DocumentContext {
-  building: Building;
-  vote: Vote;
-  member?: Member;
+  building: SimpleBuilding;
+  vote: SimpleVote;
+  member?: SimpleMember;
   date?: string; // např. nové Date().toLocaleDateString()
 }
 
@@ -33,11 +37,11 @@ function replaceVariables(text: string, context: Record<string, unknown>): strin
 }
 
 // Zpracuje opakující se blok {{#questions}}...{{/questions}}
-function renderQuestionsBlock(template: string, vote: Vote, buildingContext: Record<string, unknown>): string {
+function renderQuestionsBlock(template: string, vote: SimpleVote, buildingContext: Record<string, unknown>): string {
   const blockRegex = /\{\{#questions\}\}([\s\S]*?)\{\{\/questions\}\}/g;
   return template.replace(blockRegex, (_match, block: string) => {
     return vote.questions
-      .map((q, idx) => {
+      .map((q: SimpleQuestion, idx: number) => {
         const localCtx = {
           ...buildingContext,
           index: idx + 1,

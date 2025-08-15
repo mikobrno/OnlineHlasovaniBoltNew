@@ -8,7 +8,14 @@ import './index.css';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { AuthProvider } from './contexts/AuthContext';
-import { nhost, apolloClient } from './lib/apolloClient'; // Import nového klienta
+import { nhost, apolloClient } from './lib/apolloClient'; // Nhost + Apollo klient
+
+// Rychlá kontrola, zda jsou k dispozici povinné env proměnné
+const requiredEnv = ['VITE_NHOST_SUBDOMAIN', 'VITE_NHOST_REGION'];
+const missing = requiredEnv.filter((k) => !import.meta.env[k as keyof ImportMetaEnv]);
+if (missing.length) {
+  console.error('Chybějící env proměnné:', missing.join(', '));
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

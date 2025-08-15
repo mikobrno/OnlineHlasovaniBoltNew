@@ -35,16 +35,27 @@ export const GET_EMAIL_GENERATOR_DATA = gql`
 
 export const SEND_TEST_EMAIL_MUTATION = gql`
   mutation SendTestEmail($to: String!, $subject: String!, $body: String!) {
-    # Tuto mutaci bude potřeba implementovat na straně Hasura/Nhost
-    # pomocí serverless funkce, která zavolá emailovou službu.
-    # Prozatím zde může být placeholder, pokud funkce ještě neexistuje.
-    # Příklad názvu funkce v Hasura: send_test_email
-    # Zde předpokládáme, že taková akce existuje a vrací jednoduchý výsledek.
-    # V reálném scénáři by název 'sendEmail' odpovídal názvu akce v Hasura.
     sendEmail(to: $to, subject: $subject, body: $body) {
       success
       message
     }
   }
 `;
+
+// Fallback JS volání Netlify funkce pro lokální prostředí,
+// pokud Hasura akce ještě není nasazena.
+export async function sendTestEmailFallback(to: string, subject: string, body: string) {
+  try {
+    const res = await fetch('/.netlify/functions/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, html: body }),
+    });
+    const data = await res.json();
+    return { success: !!data.success, message: data.error || data.message || 'OK' };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Neznámá chyba';
+    return { success: false, message: msg };
+  }
+}
 

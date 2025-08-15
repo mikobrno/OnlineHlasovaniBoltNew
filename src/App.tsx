@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from './contexts/AuthContext';
+import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
 import { AppContent } from './components/AppContent';
 import { BuildingSelector } from './components/BuildingSelector';

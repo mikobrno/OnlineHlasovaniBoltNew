@@ -1,4 +1,10 @@
-import { Building, Member, Vote, GlobalVariable } from '../data/mockData';
+// Přizpůsobeno pro produkční data – žádné mock importy
+import { Vote as LegacyVote, GlobalVariable as LegacyGlobalVariable } from '../types';
+
+// Minimalistické rozhraní pro building a member používané při nahrazování proměnných
+interface SimpleBuilding { id: string; name: string; variables?: Record<string, string>; }
+interface SimpleMember { id: string; name: string; email: string; phone?: string; unit?: string; vote_weight?: number; voteWeight?: number; }
+interface SimpleVote { id: string; title: string; description?: string; status: string; start_date?: string; end_date?: string; startDate?: string; endDate?: string; }
 
 export const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
@@ -18,10 +24,10 @@ export const formatDateShort = (dateString: string): string => {
 
 export const replaceVariables = (
   text: string,
-  globalVariables?: GlobalVariable[],
-  building?: Building,
-  member?: Member,
-  vote?: Vote,
+  globalVariables?: LegacyGlobalVariable[] | { name: string; value: string }[],
+  building?: SimpleBuilding,
+  member?: SimpleMember,
+  vote?: SimpleVote | LegacyVote,
   customVariables?: Record<string, string>
 ): string => {
   let result = text;
@@ -55,7 +61,7 @@ export const replaceVariables = (
   }
 
   // Building variables
-  if (building) {
+  if (building && building.variables) {
     Object.entries(building.variables).forEach(([key, value]) => {
       const regex = new RegExp(`{{${key}}}`, 'g');
       result = result.replace(regex, value);
@@ -64,24 +70,31 @@ export const replaceVariables = (
 
   // Member variables
   if (member) {
-    result = result.replace(/{{jmeno_clena}}/g, member.name);
-    result = result.replace(/{{email_clena}}/g, member.email);
-    result = result.replace(/{{telefon_clena}}/g, member.phone);
-    result = result.replace(/{{jednotka}}/g, member.unit);
-    result = result.replace(/{{vaha_hlasu}}/g, member.voteWeight.toString());
+    result = result.replace(/{{jmeno_clena}}/g, member.name || '');
+    result = result.replace(/{{email_clena}}/g, member.email || '');
+    result = result.replace(/{{telefon_clena}}/g, member.phone || '');
+    result = result.replace(/{{jednotka}}/g, member.unit || '');
+  const weight = ("voteWeight" in member ? (member as { voteWeight?: number }).voteWeight : undefined) ?? member.vote_weight;
+    if (weight !== undefined) {
+      result = result.replace(/{{vaha_hlasu}}/g, String(weight));
+    }
   }
 
   // Vote variables
   if (vote) {
-    result = result.replace(/{{nazev_hlasovani}}/g, vote.title);
-    result = result.replace(/{{popis_hlasovani}}/g, vote.description);
-    if (vote.startDate) {
-      result = result.replace(/{{datum_zacatku}}/g, formatDate(vote.startDate));
+    result = result.replace(/{{nazev_hlasovani}}/g, vote.title || '');
+    result = result.replace(/{{popis_hlasovani}}/g, vote.description || '');
+  const start = ("startDate" in vote ? (vote as { startDate?: string }).startDate : undefined) || vote.start_date;
+  const end = ("endDate" in vote ? (vote as { endDate?: string }).endDate : undefined) || vote.end_date;
+    if (start) {
+      result = result.replace(/{{datum_zacatku}}/g, formatDate(start));
     }
-    if (vote.endDate) {
-      result = result.replace(/{{datum_konce}}/g, formatDate(vote.endDate));
+    if (end) {
+      result = result.replace(/{{datum_konce}}/g, formatDate(end));
     }
-    result = result.replace(/{{stav_hlasovani}}/g, getVoteStatusText(vote.status));
+    if (vote.status) {
+      result = result.replace(/{{stav_hlasovani}}/g, getVoteStatusText(vote.status));
+    }
   }
 
   // Custom variables

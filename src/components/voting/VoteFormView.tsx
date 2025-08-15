@@ -57,7 +57,11 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [votingDays, setVotingDays] = useState(30);
-  const [questions, setQuestions] = useState<Omit<Question, '__typename'>[]>([]);
+  interface LocalQuestionForm extends Omit<Question, '__typename'> {
+    quorumType?: 'simple' | 'qualified' | 'unanimous' | 'custom';
+    customQuorum?: { numerator: number; denominator: number };
+  }
+  const [questions, setQuestions] = useState<LocalQuestionForm[]>([]);
   const [attachments, setAttachments] = useState<string[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -189,12 +193,21 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
       return;
     }
 
+    const questionInserts = questions
+      .filter(q => q.text.trim())
+      .map(q => ({
+        text: q.text.trim(),
+        quorum_type: q.quorumType || 'simple',
+        custom_quorum_numerator: q.customQuorum?.numerator,
+        custom_quorum_denominator: q.customQuorum?.denominator
+      }));
+
     const voteData: VoteInput = {
       building_id: buildingId,
       title: title.trim(),
       description: description.trim(),
-      status: 'draft', // Vždy se ukládá jako návrh
-      questions: questions.filter(q => q.text.trim()),
+      status: 'draft',
+      questions: questionInserts.length ? { data: questionInserts } : undefined,
       start_date: startDate ? new Date(startDate).toISOString() : undefined,
       end_date: endDate ? new Date(endDate).toISOString() : undefined,
       observers: observers.length > 0 ? observers : undefined

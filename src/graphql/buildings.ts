@@ -7,6 +7,8 @@ export interface Building {
   address: string;
   created_at: string;
   updated_at: string;
+  total_units?: number | null;
+  variables?: Record<string, unknown> | null;
   // Zde mohou být v budoucnu další pole, např. vztahy
 }
 

@@ -11,6 +11,8 @@ import { VoteDetailView } from './VoteDetailView';
 import { GET_VOTES } from '../../graphql/votes';
 import { Vote } from '../../types';
 
+interface VoteWithStats extends Vote { votesCount?: number; vote_statistics?: Record<string, unknown>; }
+
 interface VotesListViewProps {
   buildingId: string;
 }
@@ -116,14 +118,18 @@ export const VotesListView: React.FC<VotesListViewProps> = ({ buildingId }) => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredVotes.map((vote) => (
-            <VoteCard
-              key={vote.id}
-              vote={vote}
-              onClick={() => setSelectedVoteId(vote.id)}
-              totalMembers={totalMembers}
-            />
-          ))}
+          {filteredVotes.map((vote: VoteWithStats) => {
+            const stats = (vote.vote_statistics as Record<string, unknown>) || {};
+            const votesCount = stats.total_votes || stats.count || 0;
+            return (
+              <VoteCard
+                key={vote.id}
+                vote={{ ...vote, votesCount }}
+                onClick={() => setSelectedVoteId(vote.id)}
+                totalMembers={totalMembers}
+              />
+            );
+          })}
         </div>
       )}
     </div>
