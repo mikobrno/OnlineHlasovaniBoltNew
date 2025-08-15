@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Paperclip, FileText } from 'lucide-react';
 import { Vote } from '../../data/mockData';
 import { useApp } from '../../contexts/AppContextCompat';
 import { Card } from '../common/Card';

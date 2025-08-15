@@ -3,24 +3,24 @@ import { Plus, Edit, Trash2, ArrowLeft } from 'lucide-react';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { BuildingEditor } from './BuildingEditor';
-import { useQuery, useMutation } from '@apollo/client';
-import { gql } from '@apollo/client';
-import { LoadingSpinner } from '../common/LoadingSpinner';
+import { useQuery, useMutation, gql } from '@apollo/client';
 import { useToast } from '../../contexts/ToastContext';
 
 // GraphQL dotazy
-const GET_BUILDINGS = gql`
+const GET_BUILDINGS_QUERY = gql`
   query GetBuildings {
     buildings {
       id
       name
       address
       total_units
+      variables
     }
   }
 `;
 
-const DELETE_BUILDING = gql`
+// GraphQL mutace pro smazání budovy
+const DELETE_BUILDING_MUTATION = gql`
   mutation DeleteBuilding($id: uuid!) {
     delete_buildings_by_pk(id: $id) {
       id
@@ -28,11 +28,13 @@ const DELETE_BUILDING = gql`
   }
 `;
 
-interface Building {
+// Musíme si nadefinovat typ pro budovu, protože už nepochází z mockData
+export interface Building {
   id: string;
   name: string;
   address: string;
   total_units: number;
+  variables: Record<string, string>;
 }
 
 interface BuildingManagerProps {
@@ -41,46 +43,37 @@ interface BuildingManagerProps {
 
 export const BuildingManager: React.FC<BuildingManagerProps> = ({ onBack }) => {
   const { showToast } = useToast();
-  const { data, loading, error } = useQuery(GET_BUILDINGS);
-  const [deleteBuildingMutation] = useMutation(DELETE_BUILDING);
-  
-  const { data, loading, error } = useQuery(GET_BUILDINGS);
   const [showEditor, setShowEditor] = useState(false);
   const [editingBuilding, setEditingBuilding] = useState<Building | null>(null);
+
+  // 3. Použití Apollo hooků místo starého useApp()
+  const { data, loading, error, refetch } = useQuery(GET_BUILDINGS_QUERY);
+  const [deleteBuildingMutation] = useMutation(DELETE_BUILDING_MUTATION, {
+    // 4. Automaticky aktualizujeme seznam budov po smazání
+    refetchQueries: [{ query: GET_BUILDINGS_QUERY }],
+  });
 
   const handleEdit = (building: Building) => {
     setEditingBuilding(building);
     setShowEditor(true);
   };
 
-  const handleDelete = async (building: Building) => {
+  const handleDelete = (building: Building) => {
     if (window.confirm(`Opravdu chcete smazat budovu "${building.name}"? Tato akce smaže i všechny související členy a hlasování.`)) {
-      try {
-        await deleteBuildingMutation({
-          variables: { id: building.id },
-          refetchQueries: [{ query: GET_BUILDINGS }]
+      deleteBuildingMutation({ variables: { id: building.id } })
+        .then(() => {
+          showToast('Budova byla úspěšně smazána', 'success');
+        })
+        .catch((err) => {
+          showToast(`Chyba při mazání budovy: ${err.message}`, 'error');
         });
-        showToast('Budova byla úspěšně smazána', 'success');
-      } catch (err) {
-        console.error('Chyba při mazání budovy:', err);
-        showToast('Nepodařilo se smazat budovu', 'error');
-      }
     }
   };
 
-  const buildings = data?.buildings || [];
+  const buildings: Building[] = data?.buildings || [];
 
-  if (loading) {
-    return <div className="flex justify-center items-center p-8"><LoadingSpinner /></div>;
-  }
-
-  if (error) {
-    return (
-      <div className="p-8 text-center text-red-600">
-        Chyba při načítání budov: {error.message}
-      </div>
-    );
-  }
+  if (loading) return <div>Načítám budovy...</div>;
+  if (error) return <div>Chyba: {error.message}</div>;
 
   const closeEditor = () => {
     setShowEditor(false);
@@ -129,7 +122,7 @@ export const BuildingManager: React.FC<BuildingManagerProps> = ({ onBack }) => {
                   {building.address}
                 </p>
                 <p className="text-sm text-gray-500 dark:text-gray-500">
-                  {building.totalUnits} jednotek
+                  {building.total_units} jednotek
                 </p>
               </div>
               <div className="flex space-x-2">

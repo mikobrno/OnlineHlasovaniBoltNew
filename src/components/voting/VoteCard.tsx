@@ -1,11 +1,28 @@
 import React from 'react';
 import { Calendar, Users, CheckCircle, Play, Eye } from 'lucide-react';
-import { Vote } from '../../data/mockData';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { formatDate, getVoteStatusText, getVoteStatusColor } from '../../lib/utils';
-import { useApp } from '../../contexts/AppContextCompat';
+import { useMutation, gql } from '@apollo/client';
 import { useToast } from '../../contexts/ToastContext';
+import { Vote } from './VotesListView';
+
+// GraphQL mutace pro spuštění hlasování
+const START_VOTE_MUTATION = gql`
+  mutation StartVote($id: uuid!) {
+    update_votes_by_pk(
+      pk_columns: { id: $id }
+      _set: { 
+        status: "active",
+        start_date: "now()"
+      }
+    ) {
+      id
+      status
+      start_date
+    }
+  }
+`;
 
 interface VoteCardProps {
   vote: Vote;
@@ -13,21 +30,31 @@ interface VoteCardProps {
 }
 
 export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick }) => {
-  const { members, startVote, observers } = useApp();
   const { showToast } = useToast();
-  const buildingMembers = members.filter(m => m.buildingId === vote.buildingId);
-  const votedMembers = Object.keys(vote.memberVotes).length;
-  const voteObservers = (vote.observers || []).map(id => 
-    observers.find(o => o.id === id)
-  ).filter(Boolean);
+  const votedMembers = Object.keys(vote.member_votes).length;
 
-  const handleStartVote = (e: React.MouseEvent) => {
+  // Mutace pro spuštění hlasování
+  const [startVoteMutation] = useMutation(START_VOTE_MUTATION, {
+    refetchQueries: ['GetVotes']
+  });
+
+  const handleStartVote = (e?: React.MouseEvent<HTMLButtonElement>) => {
+    if (!e) return;
     e.stopPropagation();
     if (window.confirm('Opravdu chcete spustit hlasování? Tato akce je nevratná.')) {
-      startVote(vote.id);
-      showToast('Hlasování bylo spuštěno', 'success');
+      startVoteMutation({
+        variables: { id: vote.id }
+      }).then(() => {
+        showToast('Hlasování bylo spuštěno', 'success');
+      }).catch((error) => {
+        showToast(`Nepodařilo se spustit hlasování: ${error.message}`, 'error');
+      });
     }
   };
+
+  // Počet hlasujících členů = počet členů s hlasy v member_votes
+  const totalMembers = 100; // TODO: Načíst počet členů z GraphQL
+  const progressWidth = `${(votedMembers / totalMembers) * 100}%`;
 
   return (
     <Card className="p-6 hover:shadow-md transition-shadow">
@@ -48,19 +75,19 @@ export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick }) => {
         <div className="space-y-2">
           <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
             <Calendar className="w-4 h-4 mr-2" />
-            <span>Vytvořeno {formatDate(vote.createdAt)}</span>
+            <span>Vytvořeno {formatDate(vote.created_at)}</span>
           </div>
 
-          {vote.status === 'active' && vote.endDate && (
+          {vote.status === 'active' && vote.end_date && (
             <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
               <Calendar className="w-4 h-4 mr-2" />
-              <span>Končí {formatDate(vote.endDate)}</span>
+              <span>Končí {formatDate(vote.end_date)}</span>
             </div>
           )}
 
           <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
             <Users className="w-4 h-4 mr-2" />
-            <span>{votedMembers} z {buildingMembers.length} hlasovalo</span>
+            <span>{votedMembers} z {totalMembers} hlasovalo</span>
           </div>
 
           <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
@@ -68,10 +95,10 @@ export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick }) => {
             <span>{vote.questions.length} otázek</span>
           </div>
 
-          {voteObservers.length > 0 && (
+          {vote.observers?.length > 0 && (
             <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
               <Eye className="w-4 h-4 mr-2" />
-              <span>{voteObservers.length} pozorovatelů</span>
+              <span>{vote.observers.length} pozorovatelů</span>
             </div>
           )}
         </div>
@@ -80,7 +107,7 @@ export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick }) => {
           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
             <div 
               className="bg-blue-600 h-2 rounded-full transition-all"
-              style={{ width: `${(votedMembers / buildingMembers.length) * 100}%` }}
+              style={{ width: progressWidth }}
             />
           </div>
         )}
@@ -89,7 +116,7 @@ export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick }) => {
           <div className="flex justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
             <Button
               size="sm"
-              onClick={handleStartVote}
+              onClick={(e) => handleStartVote(e)}
               className="flex items-center space-x-2"
             >
               <Play className="w-4 h-4" />

@@ -83,7 +83,7 @@ export const Login: React.FC = () => {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Zadejte heslo"
+                placeholder="admin123456"
                 className="pl-10 pr-10"
                 disabled={isLoading}
                 required

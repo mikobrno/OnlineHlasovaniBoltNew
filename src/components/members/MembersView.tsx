@@ -1,4 +1,50 @@
 import React, { useState } from 'react';
+import { Plus, Edit, Trash2, ArrowLeft } from 'lucide-react';
+import { useQuery, useMutation, gql } from '@apollo/client';
+import { useToast } from '../../contexts/ToastContext';
+import { PageHeader } from '../common/PageHeader';
+import { Input } from '../common/Input';
+import { Card } from '../common/Card';
+import { Button } from '../common/Button';
+import { MemberFormModal } from './MemberFormModal';
+import { ImportMembersModal } from './ImportMembersModal';
+
+// GraphQL dotaz pro načtení členů
+const GET_MEMBERS_QUERY = gql`
+  query GetMembers($building_id: uuid!) {
+    members(where: { building_id: { _eq: $building_id } }) {
+      id
+      name
+      email
+      phone
+      unit
+      vote_weight
+      representative_id
+      building_id
+    }
+  }
+`;
+
+// GraphQL mutace pro smazání člena
+const DELETE_MEMBER_MUTATION = gql`
+  mutation DeleteMember($id: uuid!) {
+    delete_members_by_pk(id: $id) {
+      id
+    }
+  }
+`;
+
+// Typ pro člena
+export interface Member {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  unit: string;
+  vote_weight: number;
+  representative_id?: string;
+  building_id: string;
+}t, { useState } from 'react';
 import { Plus, Upload, Search, Users } from 'lucide-react';
 import { useApp } from '../../contexts/AppContextCompat';
 import { useToast } from '../../contexts/ToastContext';
@@ -10,61 +56,75 @@ import { MemberFormModal } from './MemberFormModal';
 import { ImportMembersModal } from './ImportMembersModal';
 import type { Member as MemberType } from '../../data/mockData';
 
-export const MembersView: React.FC = () => {
-  const { members, selectedBuilding, deleteMember, importMembers } = useApp();
+interface MembersViewProps {
+  selectedBuilding?: {
+    id: string;
+    name: string;
+  };
+}
+
+export const MembersView: React.FC<MembersViewProps> = ({ selectedBuilding }) => {
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [editingMember, setEditingMember] = useState<MemberType | null>(null);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
 
-  const buildingMembers = members.filter(m => m.buildingId === selectedBuilding?.id);
+  // Načtení členů pomocí GraphQL
+  const { data, loading, error, refetch } = useQuery(GET_MEMBERS_QUERY, {
+    variables: { building_id: selectedBuilding?.id },
+    skip: !selectedBuilding?.id
+  });
+
+  // Mutace pro smazání člena
+  const [deleteMemberMutation] = useMutation(DELETE_MEMBER_MUTATION, {
+    refetchQueries: [
+      {
+        query: GET_MEMBERS_QUERY,
+        variables: { building_id: selectedBuilding?.id }
+      }
+    ]
+  });
+
+  const members: Member[] = data?.members || [];
   
-  const filteredMembers = buildingMembers.filter(member =>
+  const filteredMembers = members.filter((member: Member) =>
     member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.unit.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleEdit = (member: MemberType) => {
+  const handleEdit = (member: Member) => {
     setEditingMember(member);
     setShowForm(true);
   };
 
-  const handleDelete = (member: MemberType) => {
+  const handleDelete = (member: Member) => {
     if (window.confirm(`Opravdu chcete smazat člena ${member.name}?`)) {
-      deleteMember(member.id);
+      deleteMemberMutation({ 
+        variables: { id: member.id }
+      }).then(() => {
+        showToast('Člen byl úspěšně smazán', 'success');
+      }).catch((err) => {
+        showToast(`Chyba při mazání člena: ${err.message}`, 'error');
+      });
     }
   };
+
   const handleSeedMembers = async () => {
     if (!selectedBuilding) {
       showToast('Nejprve vyberte budovu', 'error');
       return;
     }
-    const bId = selectedBuilding.id;
-    const demo: Omit<MemberType, 'id'>[] = [
-      { name: 'Jan Novák', email: 'jan.novak+demo@example.com', phone: '+420601000001', unit: '1.01', voteWeight: 1.0, buildingId: bId },
-      { name: 'Marie Svobodová', email: 'marie.svobodova+demo@example.com', phone: '+420601000002', unit: '1.02', voteWeight: 1.2, buildingId: bId },
-      { name: 'Petr Dvořák', email: 'petr.dvorak+demo@example.com', phone: '+420601000003', unit: '2.01', voteWeight: 0.8, buildingId: bId },
-      { name: 'Lucie Procházková', email: 'lucie.prochazkova+demo@example.com', phone: '+420601000004', unit: '2.02', voteWeight: 1.0, buildingId: bId },
-      { name: 'Karel Černý', email: 'karel.cerny+demo@example.com', phone: '+420601000005', unit: '3.01', voteWeight: 1.5, buildingId: bId },
-      { name: 'Eva Králová', email: 'eva.kralova+demo@example.com', phone: '+420601000006', unit: '3.02', voteWeight: 1.1, buildingId: bId },
-      { name: 'Tomáš Pokorný', email: 'tomas.pokorny+demo@example.com', phone: '+420601000007', unit: '4.01', voteWeight: 0.9, buildingId: bId },
-      { name: 'Alena Jelínková', email: 'alena.jelinkova+demo@example.com', phone: '+420601000008', unit: '4.02', voteWeight: 1.3, buildingId: bId },
-      { name: 'Milan Beneš', email: 'milan.benes+demo@example.com', phone: '+420601000009', unit: '5.01', voteWeight: 1.0, buildingId: bId },
-      { name: 'Hana Fialová', email: 'hana.fialova+demo@example.com', phone: '+420601000010', unit: '5.02', voteWeight: 1.0, buildingId: bId }
-    ];
-    try {
-      await importMembers(demo);
-      showToast(`Přidáno ${demo.length} demo členů`, 'success');
-    } catch {
-      showToast('Nepodařilo se přidat demo členy', 'error');
-    }
+    
+    // TODO: Implementovat přes GraphQL mutaci
+    showToast('Funkce není zatím implementována', 'error');
   };
 
   const closeForm = () => {
     setShowForm(false);
     setEditingMember(null);
+    refetch(); // Aktualizace seznamu členů po uzavření formuláře
   };
 
   return (
@@ -136,8 +196,8 @@ export const MembersView: React.FC = () => {
               </thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredMembers.map((member) => {
-                  const representative = member.representativeId 
-                    ? buildingMembers.find(m => m.id === member.representativeId)
+                  const representative = member.representative_id 
+                    ? members.find(m => m.id === member.representative_id)
                     : null;
                     
                   return (
@@ -155,7 +215,7 @@ export const MembersView: React.FC = () => {
                         {member.unit}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {member.voteWeight}
+                        {member.vote_weight}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         {representative ? representative.name : '-'}
@@ -188,12 +248,19 @@ export const MembersView: React.FC = () => {
       <MemberFormModal
         isOpen={showForm}
         onClose={closeForm}
-        member={editingMember}
+        member={editingMember ? {
+          ...editingMember,
+          voteWeight: editingMember.vote_weight,
+          buildingId: editingMember.building_id
+        } : null}
       />
 
       <ImportMembersModal
         isOpen={showImport}
-        onClose={() => setShowImport(false)}
+        onClose={() => {
+          setShowImport(false);
+          refetch(); // Aktualizace seznamu po importu
+        }}
       />
     </div>
   );
