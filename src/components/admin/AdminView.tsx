@@ -8,19 +8,47 @@ import { BuildingVariablesManager } from './BuildingVariablesManager';
 import { SettingsView } from './SettingsView';
 import { EmailTestPanel } from './EmailTestPanel';
 
-export const AdminView: React.FC = () => {
+interface AdminViewProps {
+  buildingId: string;
+}
+
+export const AdminView: React.FC<AdminViewProps> = ({ buildingId }) => {
   const [activeSection, setActiveSection] = useState<'buildings' | 'templates' | 'email-test' | 'global-variables' | 'building-variables' | 'settings'>('buildings');
 
+  // Komponenty, které nepotřebují buildingId
+  const globalComponents = {
+    'buildings': BuildingManager,
+    'global-variables': GlobalVariablesManager,
+    'settings': SettingsView,
+    'email-test': EmailTestPanel,
+    'building-variables': BuildingVariablesManager,
+  };
+
+  // Komponenty, které potřebují buildingId
+  const buildingSpecificComponents = {
+    'templates': TemplatesView,
+  };
+
   const sections = [
-  { id: 'buildings' as const, label: 'Budovy', icon: <Building className="w-5 h-5" />, component: BuildingManager },
-  { id: 'templates' as const, label: 'Šablony', icon: <FileText className="w-5 h-5" />, component: TemplatesView },
-    { id: 'email-test' as const, label: 'Test Email Systému', icon: <TestTube className="w-5 h-5" />, component: EmailTestPanel },
-    { id: 'global-variables' as const, label: 'Globální proměnné', icon: <Globe className="w-5 h-5" />, component: GlobalVariablesManager },
-    { id: 'building-variables' as const, label: 'Proměnné budov', icon: <Database className="w-5 h-5" />, component: BuildingVariablesManager },
-    { id: 'settings' as const, label: 'Nastavení', icon: <Settings className="w-5 h-5" />, component: SettingsView }
+    { id: 'buildings' as const, label: 'Budovy', icon: <Building className="w-5 h-5" /> },
+    { id: 'templates' as const, label: 'Šablony', icon: <FileText className="w-5 h-5" /> },
+    { id: 'email-test' as const, label: 'Test Email Systému', icon: <TestTube className="w-5 h-5" /> },
+    { id: 'global-variables' as const, label: 'Globální proměnné', icon: <Globe className="w-5 h-5" /> },
+    { id: 'building-variables' as const, label: 'Proměnné budov', icon: <Database className="w-5 h-5" /> },
+    { id: 'settings' as const, label: 'Nastavení', icon: <Settings className="w-5 h-5" /> }
   ];
 
-  const ActiveComponent = sections.find(s => s.id === activeSection)?.component || (() => null);
+  const renderActiveComponent = () => {
+    if (activeSection in globalComponents) {
+      const Component = globalComponents[activeSection as keyof typeof globalComponents];
+      return <Component />;
+    }
+    if (activeSection in buildingSpecificComponents) {
+      const Component = buildingSpecificComponents[activeSection as keyof typeof buildingSpecificComponents];
+      return <Component buildingId={buildingId} />;
+    }
+    return null;
+  };
 
   return (
     <div>
@@ -56,7 +84,7 @@ export const AdminView: React.FC = () => {
         </div>
 
         <div className="lg:col-span-3">
-          <ActiveComponent />
+          {renderActiveComponent()}
         </div>
       </div>
     </div>

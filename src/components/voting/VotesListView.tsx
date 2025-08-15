@@ -3,34 +3,38 @@
 import React, { useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { useQuery } from '@apollo/client';
-import { useApp } from '../../hooks/useApp';
 import { PageHeader } from '../common/PageHeader';
 import { Input } from '../common/Input';
 import { VoteCard } from './VoteCard';
 import { VoteFormView } from './VoteFormView';
 import { VoteDetailView } from './VoteDetailView';
-import { GET_VOTES, type Vote } from '../../graphql/votes';
+import { GET_VOTES } from '../../graphql/votes';
+import { Vote } from '../../types';
 
-export const VotesListView: React.FC = () => {
-  const { selectedBuilding } = useApp();
+interface VotesListViewProps {
+  buildingId: string;
+}
+
+export const VotesListView: React.FC<VotesListViewProps> = ({ buildingId }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showForm, setShowForm] = useState(false);
-  const [selectedVote, setSelectedVote] = useState<Vote | null>(null);
+  const [selectedVoteId, setSelectedVoteId] = useState<string | null>(null);
   const [editingVote, setEditingVote] = useState<Vote | null>(null);
 
-  const { data, loading, error } = useQuery(GET_VOTES, {
-    variables: { buildingId: selectedBuilding?.id },
-    skip: !selectedBuilding?.id,
+  const { data, loading, error, refetch } = useQuery(GET_VOTES, {
+    variables: { buildingId },
+    skip: !buildingId,
   });
 
   const buildingVotes: Vote[] = data?.votes || [];
   const totalMembers = data?.members_aggregate?.aggregate?.count || 0;
 
   const filteredVotes = buildingVotes.filter(vote => {
+    const voteDescription = vote.description || '';
     const matchesSearch =
       vote.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vote.description.toLowerCase().includes(searchTerm.toLowerCase());
+      voteDescription.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || vote.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -42,33 +46,35 @@ export const VotesListView: React.FC = () => {
     return (
       <VoteFormView
         vote={editingVote}
+        buildingId={buildingId}
         onBack={() => {
           setShowForm(false);
           setEditingVote(null);
+          refetch();
         }}
       />
     );
   }
 
-  if (selectedVote) {
+  if (selectedVoteId) {
     return (
       <VoteDetailView
-        vote={selectedVote}
-        onBack={() => setSelectedVote(null)}
+        voteId={selectedVoteId}
+        buildingId={buildingId}
+        onBack={() => setSelectedVoteId(null)}
         onEdit={(voteToEdit) => {
           setEditingVote(voteToEdit);
-          setSelectedVote(null);
+          setSelectedVoteId(null);
           setShowForm(true);
         }}
       />
     );
   }
-
   return (
     <div>
       <PageHeader
         title="Hlasování"
-        subtitle={`${filteredVotes.length} hlasování pro ${selectedBuilding?.name}`}
+        subtitle={`${filteredVotes.length} hlasování`}
         action={{
           label: 'Nové hlasování',
           onClick: () => setShowForm(true),
@@ -114,7 +120,7 @@ export const VotesListView: React.FC = () => {
             <VoteCard
               key={vote.id}
               vote={vote}
-              onClick={() => setSelectedVote(vote)}
+              onClick={() => setSelectedVoteId(vote.id)}
               totalMembers={totalMembers}
             />
           ))}

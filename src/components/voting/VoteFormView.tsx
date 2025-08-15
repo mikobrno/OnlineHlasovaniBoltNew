@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Trash2, Wand2, Mail, Upload, X } from 'lucide-react';
-import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
@@ -24,28 +23,29 @@ import {
 } from '../../graphql/members';
 import { 
   GET_GLOBAL_VARIABLES,
-  type GlobalVariable 
+  type GlobalVariable
 } from '../../graphql/globals';
-import { availableVariables } from '../../data/mockData';
 import { replaceVariables, generateUUID } from '../../lib/utils';
 
 interface VoteFormViewProps {
   vote?: Vote | null;
   onBack: () => void;
+  buildingId: string;
 }
 
-export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
-  const { selectedBuilding } = useApp();
+export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildingId }) => {
   const { showToast } = useToast();
 
   // Načtení šablon
   const { data: templatesData } = useQuery(GET_EMAIL_TEMPLATES, {
-    variables: { buildingId: selectedBuilding?.id },
+    variables: { buildingId },
+    skip: !buildingId,
   });
 
   // Načtení členů pro ukázku proměnných
   const { data: membersData } = useQuery(GET_MEMBERS, {
-    variables: { buildingId: selectedBuilding?.id },
+    variables: { buildingId },
+    skip: !buildingId,
   });
 
   // Načtení globálních proměnných
@@ -57,7 +57,7 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [votingDays, setVotingDays] = useState(30);
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<Omit<Question, '__typename'>[]>([]);
   const [attachments, setAttachments] = useState<string[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -81,23 +81,23 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
       setTitle(vote.title);
       setDescription(vote.description);
       setStatus(vote.status as 'draft' | 'active');
-      setStartDate(vote.startDate ? new Date(vote.startDate).toISOString().slice(0, 16) : '');
-      setEndDate(vote.endDate ? new Date(vote.endDate).toISOString().slice(0, 16) : '');
+      setStartDate(vote.start_date ? new Date(vote.start_date).toISOString().slice(0, 16) : '');
+      setEndDate(vote.end_date ? new Date(vote.end_date).toISOString().slice(0, 16) : '');
       // Vypočítej počet dní z existujícího hlasování
-      if (vote.startDate && vote.endDate) {
-        const start = new Date(vote.startDate);
-        const end = new Date(vote.endDate);
+      if (vote.start_date && vote.end_date) {
+        const start = new Date(vote.start_date);
+        const end = new Date(vote.end_date);
         const diffTime = Math.abs(end.getTime() - start.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         setVotingDays(diffDays);
       }
       setQuestions(vote.questions);
-      setAttachments(vote.attachments || []);
+      // setAttachments(vote.attachments || []);
       setObservers(vote.observers || []);
     } else {
       // Initialize with one empty question
       setQuestions([{
-        id: generateId(),
+        id: generateUUID(),
         text: '',
         quorumType: 'simple'
       }]);
@@ -108,11 +108,14 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
     const template = templates.find(t => t.id === templateId);
     if (template) {
       // Use the first member as sample data for preview
-      const sampleMember = members.find(m => m.buildingId === selectedBuilding?.id);
+      const sampleMember = membersData?.members?.[0];
       
-      if (sampleMember && selectedBuilding) {
-        const processedTitle = replaceVariables(template.subject, globalVariables, selectedBuilding, sampleMember);
-        const processedDescription = replaceVariables(template.body, globalVariables, selectedBuilding, sampleMember);
+      if (sampleMember && buildingId) {
+        // This is a simplified placeholder. In a real app, you'd fetch the building details.
+        const mockBuilding = { id: buildingId, name: 'Vybraná budova', variables: {} }; 
+        const globalVars = globalsData?.global_variables || [];
+        const processedTitle = replaceVariables(template.subject, globalVars, mockBuilding, sampleMember);
+        const processedDescription = replaceVariables(template.body, globalVars, mockBuilding, sampleMember);
         
         setTitle(processedTitle);
         setDescription(processedDescription);
@@ -129,7 +132,7 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
 
   const addQuestion = () => {
     setQuestions([...questions, {
-      id: generateId(),
+      id: generateUUID(),
       text: '',
       quorumType: 'simple'
     }]);
@@ -137,7 +140,7 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
 
   const updateQuestion = (
     index: number,
-    field: keyof Question,
+    field: keyof Omit<Question, '__typename'>,
     value: string | number | Question['customQuorum']
   ) => {
     const newQuestions = [...questions];
@@ -179,7 +182,7 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedBuilding) return;
+    if (!buildingId) return;
     
     if (!title.trim() || !description.trim() || questions.some(q => !q.text.trim())) {
       showToast('Vyplňte všechna povinná pole', 'error');
@@ -187,7 +190,7 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
     }
 
     const voteData: VoteInput = {
-      building_id: selectedBuilding.id,
+      building_id: buildingId,
       title: title.trim(),
       description: description.trim(),
       status: 'draft', // Vždy se ukládá jako návrh
@@ -253,29 +256,61 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack }) => {
     }
   };
 
-  const templates = templatesData?.email_templates || [];
+  const templates: EmailTemplate[] = templatesData?.email_templates || [];
+  const buildingTemplates = templates.filter(t => t.building_id === buildingId || t.is_global);
 
   const getTemplatePreview = (templateId: string) => {
     const template = templates.find(t => t.id === templateId);
     const sampleMember = membersData?.members?.[0];
     const globalVars = globalsData?.global_variables || [];
     
-    if (!template || !sampleMember || !selectedBuilding) return { subject: '', body: '' };
+    if (!template || !sampleMember || !buildingId) return { subject: '', body: '' };
 
-    const globalVarsObject = Object.fromEntries(
-      globalVars.map(v => [v.name, v.value])
-    );
+    const mockBuilding = { id: buildingId, name: 'Vybraná budova', variables: {} }; 
     
     return {
-      subject: replaceVariables(template.subject, globalVarsObject, selectedBuilding, sampleMember),
-      body: replaceVariables(template.body, globalVarsObject, selectedBuilding, sampleMember)
+      subject: replaceVariables(template.subject, globalVars, mockBuilding, sampleMember),
+      body: replaceVariables(template.body, globalVars, mockBuilding, sampleMember)
     };
   };
 
   // Filter variables relevant for vote context
-  const voteRelevantVariables = availableVariables.filter(v => 
-    v.type === 'global' || v.type === 'building' || v.type === 'member'
-  );
+  interface VoteVariable {
+    name: string;
+    description: string;
+    type: 'global' | 'building' | 'member';
+  }
+
+  const voteRelevantVariables: VoteVariable[] = [];
+
+  // Globální proměnné
+  if (globalsData?.global_variables) {
+    globalsData.global_variables.forEach((g: GlobalVariable) => {
+      voteRelevantVariables.push({
+        name: g.name,
+        description: `Globální proměnná: ${g.value}`,
+        type: 'global',
+      });
+    });
+  }
+
+  // Proměnné budovy - statické prozatím
+  voteRelevantVariables.push({ name: 'building.name', description: 'Název budovy', type: 'building' });
+
+  // Proměnné člena (na základě prvního člena jako vzoru)
+  if (membersData?.members?.[0]) {
+    const sampleMember: Member = membersData.members[0];
+    Object.keys(sampleMember).forEach(key => {
+        if (key !== '__typename' && key !== 'id' && key !== 'building_id' && key !== 'user_id' && key !== 'created_at' && key !== 'updated_at') {
+             voteRelevantVariables.push({
+                name: `member.${key}`,
+                description: `Vlastnost člena: ${key}`,
+                type: 'member',
+            });
+        }
+    });
+  }
+
 
   return (
     <div>

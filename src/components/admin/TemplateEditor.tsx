@@ -1,32 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { ArrowLeft, Wand2, Eye, Copy, Plus, Trash2 } from 'lucide-react';
-import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Card } from '../common/Card';
-import { EmailTemplate, availableVariables, Variable } from '../../data/mockData';
-import { generateId, replaceVariables } from '../../lib/utils';
+import { availableVariables, Variable } from '../../lib/variables';
+import { useMutation, useQuery } from '@apollo/client';
+import { ADD_EMAIL_TEMPLATE, UPDATE_EMAIL_TEMPLATE } from '../../graphql/templates';
+import { GET_BUILDINGS_FOR_TEMPLATES } from '../../graphql/queries';
+import { Building, EmailTemplate } from '../../types';
 
 interface TemplateEditorProps {
   template?: EmailTemplate | null;
   onBack: () => void;
+  buildingId: string; 
 }
 
 export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   template,
-  onBack
+  onBack,
+  buildingId
 }) => {
-  const { addTemplate, updateTemplate, buildings, members, globalVariables } = useApp();
   const { showToast } = useToast();
   
   const [formData, setFormData] = useState({
     name: '',
     subject: '',
     body: '',
-    buildingId: '',
-    isGlobal: true
+    building_id: '',
+    is_global: true
   });
   
   const [aiPrompt, setAiPrompt] = useState('');
@@ -36,17 +39,29 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   const [newVariableName, setNewVariableName] = useState('');
   const [newVariableDesc, setNewVariableDesc] = useState('');
 
+  const { data: buildingsData, loading: buildingsLoading } = useQuery(GET_BUILDINGS_FOR_TEMPLATES);
+  const buildings: Building[] = buildingsData?.buildings || [];
+
+  const [addTemplateMutation] = useMutation(ADD_EMAIL_TEMPLATE, {
+    refetchQueries: ['GetEmailTemplates'],
+  });
+  const [updateTemplateMutation] = useMutation(UPDATE_EMAIL_TEMPLATE, {
+    refetchQueries: ['GetEmailTemplates'],
+  });
+
   useEffect(() => {
     if (template) {
       setFormData({
-        name: template.name,
-        subject: template.subject,
-        body: template.body,
-        buildingId: template.buildingId || '',
-        isGlobal: template.isGlobal
+        name: template.name || '',
+        subject: template.subject || '',
+        body: template.body || '',
+        building_id: template.building_id || buildingId || '',
+        is_global: template.is_global ?? true
       });
+    } else {
+        setFormData(prev => ({ ...prev, building_id: buildingId, is_global: !buildingId }));
     }
-  }, [template]);
+  }, [template, buildingId]);
 
   const addCustomVariable = () => {
     if (!newVariableName.trim() || !newVariableDesc.trim()) {
@@ -56,7 +71,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
 
     const variableName = newVariableName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     
-    if (availableVariables.some(v => v.name === variableName) || 
+    if (availableVariables.some((v: { name: string; }) => v.name === variableName) || 
         customVariables.some(v => v.name === variableName)) {
       showToast('Proměnná s tímto názvem již existuje', 'error');
       return;
@@ -79,33 +94,50 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     showToast('Vlastní proměnná byla odstraněna', 'success');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.name.trim() || !formData.subject.trim() || !formData.body.trim()) {
       showToast('Vyplňte všechna povinná pole', 'error');
       return;
     }
+    
+    if (!formData.is_global && !formData.building_id) {
+        showToast('Vyberte budovu pro specifickou šablonu.', 'error');
+        return;
+    }
 
-    const templateData: EmailTemplate = {
-      id: template?.id || generateId(),
+    // TODO: Vlastní proměnné nejsou zatím ukládány do DB
+    const templateData = {
       name: formData.name.trim(),
       subject: formData.subject.trim(),
       body: formData.body.trim(),
-      buildingId: formData.isGlobal ? undefined : formData.buildingId,
-      isGlobal: formData.isGlobal,
-      customVariables: customVariables.length > 0 ? customVariables : undefined
+      building_id: formData.is_global ? null : formData.building_id,
+      is_global: formData.is_global,
     };
 
-    if (template) {
-      updateTemplate(templateData);
-      showToast('Šablona byla aktualizována', 'success');
-    } else {
-      addTemplate(templateData);
-      showToast('Šablona byla přidána', 'success');
+    try {
+        if (template && template.id) {
+          await updateTemplateMutation({
+            variables: {
+              id: template.id,
+              template: templateData,
+            },
+          });
+          showToast('Šablona byla aktualizována', 'success');
+        } else {
+          await addTemplateMutation({
+            variables: {
+              template: templateData,
+            },
+          });
+          showToast('Šablona byla přidána', 'success');
+        }
+        onBack();
+    } catch (error) {
+        console.error("Error saving template:", error);
+        showToast('Chyba při ukládání šablony.', 'error');
     }
-    
-    onBack();
   };
 
   const generateWithAI = async () => {
@@ -132,7 +164,7 @@ Vygeneruj obsah e-mailu v českém jazyce pro SVJ/BD na základě tohoto popisu:
 Požadavky:
 - Formální, ale přátelský ton
 - Struktura: úvodní oslovení, hlavní obsah, závěr, podpis
-- Použij relevantní proměnné ze seznamu: ${availableVariables.map(v => `{{${v.name}}}`).join(', ')}
+- Použij relevantní proměnné ze seznamu: ${availableVariables.map((v: { name: string; }) => `{{${v.name}}}`).join(', ')}
 - Odpověz pouze obsahem e-mailu bez dalšího textu
 - Nepoužívej markdown formátování
 `;
@@ -171,15 +203,14 @@ Požadavky:
     }
   };
 
+  // Funkce náhledu je dočasně zjednodušena, protože nemáme přístup k členům a globálním proměnným
   const getPreviewData = () => {
-    const building = buildings[0];
-    const member = members[0];
-    
-    if (!building || !member) return { subject: '', body: '' };
+    const previewSubject = formData.subject.replace(/{{.*?}}/g, '[proměnná]');
+    const previewBody = formData.body.replace(/{{.*?}}/g, '[proměnná]');
     
     return {
-      subject: replaceVariables(formData.subject, globalVariables, building, member),
-      body: replaceVariables(formData.body, globalVariables, building, member)
+      subject: previewSubject,
+      body: previewBody
     };
   };
 
@@ -221,8 +252,8 @@ Požadavky:
                         <input
                           type="radio"
                           name="scope"
-                          checked={formData.isGlobal}
-                          onChange={() => setFormData({ ...formData, isGlobal: true })}
+                          checked={formData.is_global}
+                          onChange={() => setFormData({ ...formData, is_global: true })}
                           className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                         />
                         <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -235,8 +266,8 @@ Požadavky:
                         <input
                           type="radio"
                           name="scope"
-                          checked={!formData.isGlobal}
-                          onChange={() => setFormData({ ...formData, isGlobal: false })}
+                          checked={!formData.is_global}
+                          onChange={() => setFormData({ ...formData, is_global: false })}
                           className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                         />
                         <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -246,20 +277,23 @@ Požadavky:
                     </div>
                   </div>
 
-                  {!formData.isGlobal && (
+                  {!formData.is_global && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label htmlFor="building-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Budova
                       </label>
                       <select
-                        value={formData.buildingId}
+                        id="building-select"
+                        value={formData.building_id}
+                        onChange={(e) => setFormData({ ...formData, building_id: e.target.value })}
                         className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         required
+                        disabled={buildingsLoading}
                       >
                         <option value="">Vyberte budovu</option>
-                        {buildings.map((building) => (
-                          <option key={building.id} value={building.id}>
-                            {building.name}
+                        {buildings.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name}
                           </option>
                         ))}
                       </select>
@@ -353,7 +387,7 @@ Požadavky:
                 Systémové proměnné
               </h4>
               <div className="space-y-2 max-h-64 overflow-y-auto mb-4">
-                {availableVariables.map((variable) => (
+                {availableVariables.map((variable: { name: string; description: string; }) => (
                   <button
                     key={variable.name}
                     type="button"
@@ -392,6 +426,7 @@ Požadavky:
                         </button>
                         <button
                           type="button"
+                          title={`Smazat proměnnou ${variable.name}`}
                           onClick={() => removeCustomVariable(variable.name)}
                           className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-100 dark:hover:bg-red-900/50 rounded"
                         >
@@ -476,7 +511,7 @@ Požadavky:
               </div>
 
               <div className="text-xs text-gray-500 dark:text-gray-400">
-                Náhled s fiktivními daty z první budovy a prvního člena
+                Náhled je zjednodušený. Proměnné budou nahrazeny při odeslání.
               </div>
             </div>
           </Card>

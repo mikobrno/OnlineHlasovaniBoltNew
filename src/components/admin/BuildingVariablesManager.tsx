@@ -1,21 +1,37 @@
 import React, { useState } from 'react';
 import { Plus, Edit, Trash2 } from 'lucide-react';
-import { useApp } from '../../hooks/useApp';
+import { useQuery, useMutation } from '@apollo/client';
+import {
+  GET_BUILDING_VARIABLES,
+  ADD_BUILDING_VARIABLE,
+  UPDATE_BUILDING_VARIABLE,
+  DELETE_BUILDING_VARIABLE,
+} from '../../graphql/buildingVariables';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Modal } from '../common/Modal';
-import { BuildingVariable } from '../../data/mockData';
+import { BuildingVariable } from '../../types';
 
 export const BuildingVariablesManager: React.FC = () => {
-  const { buildingVariables, addBuildingVariable, updateBuildingVariable, deleteBuildingVariable } = useApp();
-  const safeAdd = addBuildingVariable ?? (async () => {});
-  const safeUpdate = updateBuildingVariable ?? (async () => {});
-  const safeDelete = deleteBuildingVariable ?? (async () => {});
   const { showToast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingVariable, setEditingVariable] = useState<BuildingVariable | null>(null);
+  
+  const { data, loading, error } = useQuery(GET_BUILDING_VARIABLES);
+  const [addVariableMutation] = useMutation(ADD_BUILDING_VARIABLE, {
+    refetchQueries: [GET_BUILDING_VARIABLES],
+  });
+  const [updateVariableMutation] = useMutation(UPDATE_BUILDING_VARIABLE, {
+    refetchQueries: [GET_BUILDING_VARIABLES],
+  });
+  const [deleteVariableMutation] = useMutation(DELETE_BUILDING_VARIABLE, {
+    refetchQueries: [GET_BUILDING_VARIABLES],
+  });
+
+  const buildingVariables: BuildingVariable[] = data?.building_variables || [];
+
   const [newVariable, setNewVariable] = useState({
     name: '',
     description: '',
@@ -25,7 +41,7 @@ export const BuildingVariablesManager: React.FC = () => {
     options: ['']
   });
 
-  const handleAddVariable = () => {
+  const handleAddVariable = async () => {
     if (!newVariable.name.trim() || !newVariable.description.trim()) {
       showToast('Vyplňte název a popis proměnné', 'error');
       return;
@@ -33,12 +49,12 @@ export const BuildingVariablesManager: React.FC = () => {
 
     const variableName = newVariable.name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     
-  if (buildingVariables.some((v) => v.name === variableName)) {
+    if (buildingVariables.some((v) => v.name === variableName)) {
       showToast('Proměnná s tímto názvem již existuje', 'error');
       return;
     }
 
-    const variable: BuildingVariable = {
+    const variableToInsert = {
       name: variableName,
       description: newVariable.description.trim(),
       type: newVariable.type,
@@ -49,10 +65,15 @@ export const BuildingVariablesManager: React.FC = () => {
         : undefined
     };
 
-  safeAdd(variable);
-    resetForm();
-    setShowAddModal(false);
-    showToast('Proměnná budovy byla přidána', 'success');
+    try {
+      await addVariableMutation({ variables: { variable: variableToInsert } });
+      resetForm();
+      setShowAddModal(false);
+      showToast('Proměnná budovy byla přidána', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Chyba při přidávání proměnné', 'error');
+    }
   };
 
   const handleEditVariable = (variable: BuildingVariable) => {
@@ -68,14 +89,13 @@ export const BuildingVariablesManager: React.FC = () => {
     setShowAddModal(true);
   };
 
-  const handleUpdateVariable = () => {
+  const handleUpdateVariable = async () => {
     if (!editingVariable || !newVariable.description.trim()) {
       showToast('Vyplňte popis proměnné', 'error');
       return;
     }
 
-    const updatedVariable: BuildingVariable = {
-      ...editingVariable,
+    const updatedVariableData = {
       description: newVariable.description.trim(),
       type: newVariable.type,
       required: newVariable.required,
@@ -85,17 +105,26 @@ export const BuildingVariablesManager: React.FC = () => {
         : undefined
     };
 
-  safeUpdate(updatedVariable);
-    resetForm();
-    setEditingVariable(null);
-    setShowAddModal(false);
-    showToast('Proměnná budovy byla aktualizována', 'success');
+    try {
+      await updateVariableMutation({ variables: { id: editingVariable.id, variable: updatedVariableData } });
+      resetForm();
+      setEditingVariable(null);
+      setShowAddModal(false);
+      showToast('Proměnná budovy byla aktualizována', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Chyba při aktualizaci proměnné', 'error');
+    }
   };
 
   const handleDeleteVariable = (variable: BuildingVariable) => {
     if (window.confirm(`Opravdu chcete smazat proměnnou "${variable.description}"? Tato akce ovlivní všechny budovy.`)) {
-  safeDelete(variable.name);
-      showToast('Proměnná budovy byla smazána', 'success');
+      deleteVariableMutation({ variables: { id: variable.id } })
+        .then(() => showToast('Proměnná budovy byla smazána', 'success'))
+        .catch((e) => {
+            console.error(e);
+            showToast('Chyba při mazání proměnné', 'error');
+        });
     }
   };
 
@@ -142,6 +171,9 @@ export const BuildingVariablesManager: React.FC = () => {
     }
   };
 
+  if (loading) return <p>Načítání proměnných...</p>;
+  if (error) return <p>Chyba při načítání proměnných: {error.message}</p>;
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -181,7 +213,7 @@ export const BuildingVariablesManager: React.FC = () => {
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                   <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded font-mono">
-                    {`{{${variable.name}}}`}
+                    {`{{building.${variable.name}}}`}
                   </code>
                 </div>
                 {variable.placeholder && (
@@ -191,7 +223,7 @@ export const BuildingVariablesManager: React.FC = () => {
                 )}
                 {variable.options && (
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Možnosti: {variable.options.join(', ')}
+                    Možnosti: {Array.isArray(variable.options) ? variable.options.join(', ') : ''}
                   </div>
                 )}
               </div>
@@ -349,7 +381,7 @@ export const BuildingVariablesManager: React.FC = () => {
               </h4>
               <p className="text-gray-600 dark:text-gray-400 mb-3">
                 <strong>1. Definice šablony:</strong> Zde vytvoříte "prázdný rámeček" pro informaci. 
-                Řeknete systému: "Každá budova bude mít proměnnou {"{{ico}}"}".
+                Řeknete systému: "Každá budova bude mít proměnnou {`{{building.ico}}`}".
               </p>
               <p className="text-gray-600 dark:text-gray-400">
                 <strong>2. Vyplnění hodnoty:</strong> Při editaci konkrétní budovy systém zobrazí 

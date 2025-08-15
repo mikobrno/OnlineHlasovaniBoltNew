@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Plus, Upload, Search } from 'lucide-react';
 import { useQuery, useMutation } from '@apollo/client';
-import { useApp } from '../../contexts/AppContext';
 import { useToast } from '../../contexts/ToastContext';
 import { PageHeader } from '../common/PageHeader';
 import { Input } from '../common/Input';
@@ -15,78 +14,86 @@ import {
     type Member
 } from '../../graphql/members';
 
-export const MembersView: React.FC = () => {
-  const { selectedBuilding } = useApp();
+interface MembersViewProps {
+  buildingId: string;
+}
+
+export const MembersView: React.FC<MembersViewProps> = ({ buildingId }) => {
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
-  // Načtení členů pomocí GraphQL
   const { data, loading, error, refetch } = useQuery(GET_MEMBERS, {
-    variables: { buildingId: selectedBuilding?.id },
-    skip: !selectedBuilding?.id,
+    variables: { buildingId },
+    skip: !buildingId,
   });
 
-  // Mutace pro smazání člena
   const [deleteMemberMutation] = useMutation(DELETE_MEMBER, {
-    refetchQueries: [
-      {
-        query: GET_MEMBERS,
-        variables: { buildingId: selectedBuilding?.id },
-      },
-    ],
+    onCompleted: () => {
+        showToast('Člen byl úspěšně smazán', 'success');
+        refetch();
+    },
     onError: (error) => {
       showToast(`Chyba při mazání člena: ${error.message}`, 'error');
     }
   });
 
-  const members: Member[] = data?.members || [];
+  const members = useMemo(() => (data?.members as Member[]) || [], [data]);
+
+  const membersMap = useMemo(() =>
+    members.reduce((acc: Record<string, Member>, member: Member) => {
+      acc[member.id] = member;
+      return acc;
+    }, {}),
+  [members]);
   
-  const filteredMembers = members.filter((member: MemberType) =>
-    member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.unit.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMembers = useMemo(() =>
+    members.filter((member: Member) =>
+        member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (member.unit && member.unit.toLowerCase().includes(searchTerm.toLowerCase()))
+    ), [members, searchTerm]);
 
   const handleEdit = (member: Member) => {
     setEditingMember(member);
     setShowForm(true);
   };
 
-  const handleDelete = async (member: Member) => {
-    if (!window.confirm(`Opravdu chcete smazat člena ${member.name}?`)) {
+  const handleDelete = async (memberId: string) => {
+    if (!window.confirm(`Opravdu chcete smazat tohoto člena?`)) {
       return;
     }
-
-    try {
-      await deleteMemberMutation({ 
-        variables: { id: member.id },
-      });
-      showToast('Člen byl úspěšně smazán', 'success');
-    } catch {
-      // Chybu už zpracovává onError v konfiguraci mutace
-    }
+    await deleteMemberMutation({ variables: { id: memberId } });
   };
 
   const closeForm = () => {
     setShowForm(false);
     setEditingMember(null);
-    refetch(); // Aktualizace seznamu členů po uzavření formuláře
+    refetch();
   };
 
-  if (loading) return <div>Načítám členy...</div>;
-  if (error) return <div>Chyba při načítání členů: {error.message}</div>;
+  if (!buildingId) {
+    return (
+        <div className="text-center py-12">
+            <h2 className="text-xl font-semibold text-gray-600 dark:text-gray-300">Vyberte budovu</h2>
+            <p className="text-gray-500 dark:text-gray-400 mt-2">Pro zobrazení členů je potřeba nejprve vybrat budovu.</p>
+        </div>
+    );
+  }
+
+  if (loading) return <div className="text-center p-8">Načítám členy...</div>;
+  if (error) return <div className="text-center p-8 text-red-500">Chyba při načítání členů: {error.message}</div>;
 
   return (
     <div>
       <PageHeader
         title="Členové"
-        subtitle={`${filteredMembers.length} členů v budově ${selectedBuilding?.name}`}
+        subtitle={`${filteredMembers.length} členů`}
         action={{
           label: 'Nový člen',
-          onClick: () => setShowForm(true),
+          onClick: () => { setEditingMember(null); setShowForm(true); },
           icon: <Plus className="w-4 h-4" />,
         }}
       />
@@ -95,7 +102,7 @@ export const MembersView: React.FC = () => {
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Hledat členy..."
+            placeholder="Hledat členy (jméno, email, jednotka)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -110,14 +117,17 @@ export const MembersView: React.FC = () => {
       {filteredMembers.length === 0 ? (
         <div className="text-center py-12">
           <div className="text-gray-400 dark:text-gray-500 mb-4">
-            {searchTerm ? 'Žádní členové nevyhovují filtru' : 'Zatím žádní členové'}
+            {searchTerm ? 'Žádní členové nevyhovují filtru' : 'V této budově zatím nejsou žádní členové.'}
           </div>
+           <Button onClick={() => { setEditingMember(null); setShowForm(true); }}>
+              <Plus className="w-4 h-4 mr-2" />
+              Přidat prvního člena
+            </Button>
         </div>
       ) : (
-        <Card className="p-6">
+        <Card className="p-0">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              {/* Zbytek tabulky zůstává stejný... */}
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -135,15 +145,15 @@ export const MembersView: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Zastupuje
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Akce
+                  <th className="relative px-6 py-3">
+                    <span className="sr-only">Akce</span>
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredMembers.map((member) => {
+                {filteredMembers.map((member: Member) => {
                   const representative = member.representative_id
-                    ? members.find(m => m.id === member.representative_id)
+                    ? membersMap[member.representative_id]
                     : null;
                     
                   return (
@@ -154,7 +164,7 @@ export const MembersView: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         <div>
                           <div>{member.email}</div>
-                          <div className="text-xs">{member.phone}</div>
+                          <div className="text-xs">{member.phone || '-'}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
@@ -166,7 +176,7 @@ export const MembersView: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         {representative ? representative.name : '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                         <Button
                           size="sm"
                           variant="ghost"
@@ -177,7 +187,7 @@ export const MembersView: React.FC = () => {
                         <Button
                           size="sm"
                           variant="danger"
-                          onClick={() => handleDelete(member)}
+                          onClick={() => handleDelete(member.id)}
                         >
                           Smazat
                         </Button>
@@ -195,14 +205,16 @@ export const MembersView: React.FC = () => {
         isOpen={showForm}
         onClose={closeForm}
         member={editingMember}
+        buildingId={buildingId}
       />
 
       <ImportMembersModal
         isOpen={showImport}
         onClose={() => {
           setShowImport(false);
-          refetch(); // Aktualizace seznamu po importu
+          refetch();
         }}
+        buildingId={buildingId}
       />
     </div>
   );

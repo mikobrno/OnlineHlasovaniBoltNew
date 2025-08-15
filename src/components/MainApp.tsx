@@ -4,22 +4,27 @@ import { VotesListView } from './voting/VotesListView';
 import { MembersView } from './members/MembersView';
 import { SimpleGeneratorView } from './email/SimpleGeneratorView';
 import { AdminView } from './admin/AdminView';
+import type { Building } from '../graphql/buildings';
 
-export const MainApp: React.FC = () => {
+interface MainAppProps {
+  selectedBuilding: Building;
+}
+
+export const MainApp: React.FC<MainAppProps> = ({ selectedBuilding }) => {
   const [activeTab, setActiveTab] = useState('votes');
 
   const renderActiveView = () => {
     switch (activeTab) {
       case 'votes':
-        return <VotesListView />;
+        return <VotesListView buildingId={selectedBuilding.id} />;
       case 'members':
-        return <MembersView />;
+        return <MembersView buildingId={selectedBuilding.id} />;
       case 'emails':
-        return <SimpleGeneratorView />;
+        return <SimpleGeneratorView buildingId={selectedBuilding.id} />;
       case 'admin':
-        return <AdminView />;
+        return <AdminView buildingId={selectedBuilding.id} />;
       default:
-        return <VotesListView />;
+        return <VotesListView buildingId={selectedBuilding.id} />;
     }
   };
 

@@ -1,115 +1,47 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, ReactNode } from 'react';
+import { useAuthenticationStatus, useUserData, useSignOut } from '@nhost/react';
+import type { User } from '@nhost/nhost-js';
+import { FullPageSpinner } from '../components/common/Spinners';
 
-interface User {
-  id: string;
-  email: string;
-  role: 'admin' | 'manager' | 'user';
-}
-
+// Definujeme typ pro náš kontext
 interface AuthContextType {
-  user: User | null;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
+  user: User | null;
+  signOut: () => Promise<void>;
 }
 
+// Vytvoříme kontext
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function useAuth() {
+// Vytvoříme Provider komponentu
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  // Použijeme Nhost hooky pro získání stavu autentizace a dat uživatele
+  const { isAuthenticated, isLoading } = useAuthenticationStatus();
+  const user = useUserData();
+  const { signOut } = useSignOut();
+
+  // Během načítání stavu z Nhost zobrazíme spinner na celé stránce
+  if (isLoading) {
+    return <FullPageSpinner />;
+  }
+
+  // Hodnota, kterou poskytneme všem komponentám v aplikaci
+  const value = {
+    isAuthenticated,
+    isLoading,
+    user,
+    signOut,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+// Vytvoříme vlastní hook pro snadné použití kontextu
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
-
-interface AuthProviderProps {
-  children: React.ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Testovací účty - v produkci by byly v databázi
-  const testAccounts = [
-    { email: 'admin@onlinesprava.cz', password: 'admin123', role: 'admin' as const },
-    { email: 'spravce@budova1.cz', password: 'spravce123', role: 'manager' as const },
-    { email: 'test@test.cz', password: 'test123', role: 'user' as const }
-  ];
-
-  useEffect(() => {
-    // Zkusíme načíst uloženého uživatele
-    const savedUser = localStorage.getItem('voting_user');
-    if (savedUser) {
-      try {
-        const parsedUser = JSON.parse(savedUser);
-        setUser(parsedUser);
-      } catch (error) {
-        console.error('Chyba při načítání uživatele:', error);
-        localStorage.removeItem('voting_user');
-      }
-    }
-    setIsLoading(false);
-  }, []);
-
-  const login = async (email: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
-    
-    try {
-      // Najdeme účet v testovacích účtech
-      const account = testAccounts.find(acc => 
-        acc.email.toLowerCase() === email.toLowerCase() && acc.password === password
-      );
-
-      if (account) {
-        const user: User = {
-          id: `user_${Date.now()}`,
-          email: account.email,
-          role: account.role
-        };
-        
-        setUser(user);
-        localStorage.setItem('voting_user', JSON.stringify(user));
-        setIsLoading(false);
-        return true;
-      }
-
-      // V budoucnu zde může být autentizace přes Supabase Auth
-      // const { data, error } = await supabase.auth.signInWithPassword({
-      //   email,
-      //   password
-      // });
-
-      setIsLoading(false);
-      return false;
-    } catch (error) {
-      console.error('Chyba při přihlášení:', error);
-      setIsLoading(false);
-      return false;
-    }
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('voting_user');
-    
-    // V budoucnu zde může být odhlášení z Supabase
-    // supabase.auth.signOut();
-  };
-
-  const value: AuthContextType = {
-    user,
-    isLoading,
-    login,
-    logout,
-    isAuthenticated: !!user
-  };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
+};

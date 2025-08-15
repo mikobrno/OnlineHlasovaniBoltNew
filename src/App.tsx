@@ -1,40 +1,35 @@
+import { useState } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { Login } from './components/Login';
-import { AppContent } from './components/AppContent.tsx';
-import { useToast } from './contexts/ToastContext';
+import { AppContent } from './components/AppContent';
+import { BuildingSelector } from './components/BuildingSelector';
+import type { Building } from './graphql/buildings';
 
 function App() {
-  const { isAuthenticated, login, isLoading: authLoading, user } = useAuth();
-  const { showToast } = useToast();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
 
-  console.log('App render - isAuthenticated:', isAuthenticated, 'isLoading:', authLoading, 'user:', user);
-
-  const handleLogin = async (credentials: { email: string; password: string }) => {
-    const success = await login(credentials.email, credentials.password);
-    if (success) {
-      showToast('Přihlášení proběhlo úspěšně', 'success');
-    } else {
-      showToast('Neplatné přihlašovací údaje', 'error');
-    }
-  };
-
-  // Pokud načítáme, zobraz loader
+  // Pokud načítáme stav autentizace, zobrazíme loader
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-lg">Načítání...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-lg font-medium text-gray-600 dark:text-gray-300">Načítání...</div>
       </div>
     );
   }
 
-  // Pokud není přihlášen, zobraz login
+  // Pokud uživatel není přihlášen, zobrazíme přihlašovací formulář
   if (!isAuthenticated) {
-    return <Login onLogin={handleLogin} isLoading={authLoading} />;
+    return <Login />;
   }
 
-  // Po přihlášení zobraz hlavní obsah aplikace
-  return <AppContent />;
+  // Pokud je uživatel přihlášen, ale nevybral budovu, zobrazíme výběr budov
+  if (!selectedBuilding) {
+    return <BuildingSelector onBuildingSelect={setSelectedBuilding} />;
+  }
 
+  // Po přihlášení a výběru budovy zobrazíme hlavní obsah aplikace
+  return <AppContent selectedBuilding={selectedBuilding} onDeselectBuilding={() => setSelectedBuilding(null)} />;
 }
 
 export default App;

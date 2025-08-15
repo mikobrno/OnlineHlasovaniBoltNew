@@ -1,41 +1,48 @@
 import React, { useState } from 'react';
-import { Mail, FileText } from 'lucide-react';
-import { Card } from '../common/Card';
+import { cn } from '../../lib/utils';
 import { TemplateManager } from './TemplateManager';
 import { DocumentTemplateManager } from './DocumentTemplateManager';
 
-export const TemplatesView: React.FC = () => {
-  const [tab, setTab] = useState<'emails' | 'docs'>('emails');
+interface TemplatesViewProps {
+  buildingId: string;
+}
+
+export const TemplatesView: React.FC<TemplatesViewProps> = ({ buildingId }) => {
+  const [activeTab, setActiveTab] = useState('email');
 
   return (
-    <div>
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Šablony</h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">Spravujte e‑mailové a dokumentové šablony.</p>
+    <div className="space-y-6">
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+          <button
+            onClick={() => setActiveTab('email')}
+            className={cn(
+              'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm',
+              activeTab === 'email'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:border-gray-600'
+            )}
+          >
+            E‑mailové šablony
+          </button>
+          <button
+            onClick={() => setActiveTab('document')}
+            className={cn(
+              'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm',
+              activeTab === 'document'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:border-gray-600'
+            )}
+          >
+            Dokumentové šablony
+          </button>
+        </nav>
       </div>
 
-      <Card className="p-2 mb-4">
-        <div className="flex gap-2">
-          <button
-            className={`px-3 py-2 rounded text-sm flex items-center gap-2 ${tab === 'emails' ? 'bg-blue-100 text-blue-700 dark:bg-blue-800 dark:text-blue-200' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-            onClick={() => setTab('emails')}
-            aria-label="Zobrazit e‑mailové šablony"
-            title="E‑maily"
-          >
-            <Mail className="w-4 h-4" /> E‑maily
-          </button>
-          <button
-            className={`px-3 py-2 rounded text-sm flex items-center gap-2 ${tab === 'docs' ? 'bg-blue-100 text-blue-700 dark:bg-blue-800 dark:text-blue-200' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-            onClick={() => setTab('docs')}
-            aria-label="Zobrazit dokumentové šablony"
-            title="Dokumenty"
-          >
-            <FileText className="w-4 h-4" /> Dokumenty
-          </button>
-        </div>
-      </Card>
-
-      {tab === 'emails' ? <TemplateManager /> : <DocumentTemplateManager />}
+      <div>
+        {activeTab === 'email' && <TemplateManager buildingId={buildingId} />}
+        {activeTab === 'document' && <DocumentTemplateManager buildingId={buildingId} />}
+      </div>
     </div>
   );
 };

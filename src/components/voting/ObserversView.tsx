@@ -1,100 +1,132 @@
 import React, { useState } from 'react';
 import { Plus, Mail, Trash2, Eye } from 'lucide-react';
-import { Vote, Observer } from '../../data/mockData';
-import { useApp } from '../../hooks/useApp';
+import { useMutation, useQuery } from '@apollo/client';
+import { Vote, Observer } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import { Input } from '../common/Input';
-import { generateId } from '../../lib/utils';
-import { sendEmailViaGmail } from '../../lib/emailService';
+import { GET_OBSERVERS_BY_BUILDING_ID } from '../../graphql/queries';
+import { 
+  CREATE_OBSERVER, 
+  ADD_OBSERVER_TO_VOTE, 
+  REMOVE_OBSERVER_FROM_VOTE, 
+  DELETE_OBSERVER,
+  SEND_OBSERVER_INVITATION
+} from '../../graphql/mutations';
 
 interface ObserversViewProps {
   vote: Vote;
+  buildingId: string;
 }
 
-export const ObserversView: React.FC<ObserversViewProps> = ({ vote }) => {
-  const { observers, selectedBuilding } = useApp();
+export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }) => {
   const { showToast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newObserver, setNewObserver] = useState({ name: '', email: '' });
 
-  const buildingObservers = observers.filter(o => o.buildingId === selectedBuilding?.id);
-  const voteObserverIds = vote.observers || [];
-  const voteObservers = voteObserverIds.map(id => observers.find(o => o.id === id)).filter(Boolean) as Observer[];
+  const { data: observersData, loading: observersLoading, refetch: refetchObservers } = useQuery(GET_OBSERVERS_BY_BUILDING_ID, {
+    variables: { buildingId },
+    skip: !buildingId,
+  });
+
+  const voteObserverIds = vote.observers?.map(o => o.id) || [];
+  const buildingObservers: Observer[] = observersData?.observers || [];
+  const voteObservers = buildingObservers.filter(o => voteObserverIds.includes(o.id));
   const availableObservers = buildingObservers.filter(o => !voteObserverIds.includes(o.id));
 
-  const handleAddObserver = () => {
-    if (!newObserver.name.trim() || !newObserver.email.trim() || !selectedBuilding) {
+  const [createObserver] = useMutation(CREATE_OBSERVER);
+  const [addObserverToVote] = useMutation(ADD_OBSERVER_TO_VOTE, {
+    refetchQueries: ['GetVoteDetails']
+  });
+  const [removeObserverFromVote] = useMutation(REMOVE_OBSERVER_FROM_VOTE, {
+    refetchQueries: ['GetVoteDetails']
+  });
+  const [deleteObserver] = useMutation(DELETE_OBSERVER);
+  const [sendInvitation] = useMutation(SEND_OBSERVER_INVITATION);
+
+  const handleAddObserver = async () => {
+    if (!newObserver.name.trim() || !newObserver.email.trim()) {
       showToast('Vyplňte všechna pole', 'error');
       return;
     }
 
-    const observer: Observer = {
-      id: generateId(),
-      name: newObserver.name.trim(),
-      email: newObserver.email.trim(),
-      buildingId: selectedBuilding.id,
-      createdAt: new Date().toISOString()
-    };
-
-  // TODO addObserver & addVoteObserver implement
-    setNewObserver({ name: '', email: '' });
-    setShowAddModal(false);
-  showToast('Demo: Pozorovatel by byl přidán', 'info');
+    try {
+      const { data } = await createObserver({
+        variables: {
+          name: newObserver.name.trim(),
+          email: newObserver.email.trim(),
+          building_id: buildingId,
+        },
+      });
+      const createdObserverId = data?.insert_observers_one?.id;
+      if (createdObserverId) {
+        await handleAddExistingObserver(createdObserverId);
+        showToast('Nový pozorovatel byl vytvořen a přiřazen k hlasování.', 'success');
+        setNewObserver({ name: '', email: '' });
+        setShowAddModal(false);
+        refetchObservers();
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Neznámá chyba';
+      showToast(`Chyba při vytváření pozorovatele: ${message}`, 'error');
+    }
   };
 
-  const handleAddExistingObserver = (observerId: string) => {
-    // TODO addVoteObserver implement
-    showToast('Demo: Pozorovatel by byl přidán k hlasování', 'info');
+  const handleAddExistingObserver = async (observerId: string) => {
+    try {
+      await addObserverToVote({ variables: { vote_id: vote.id, observer_id: observerId } });
+      showToast('Pozorovatel byl přidán k hlasování.', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Neznámá chyba';
+      showToast(`Chyba při přidávání pozorovatele: ${message}`, 'error');
+    }
   };
 
-  const handleRemoveObserver = (observerId: string) => {
-    // TODO removeVoteObserver implement
-    showToast('Demo: Pozorovatel by byl odebrán z hlasování', 'info');
+  const handleRemoveObserver = async (observerId: string) => {
+    if (window.confirm('Opravdu chcete odebrat tohoto pozorovatele z hlasování?')) {
+      try {
+        await removeObserverFromVote({ variables: { vote_id: vote.id, observer_id: observerId } });
+        showToast('Pozorovatel byl odebrán z hlasování.', 'success');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Neznámá chyba';
+        showToast(`Chyba při odebírání pozorovatele: ${message}`, 'error');
+      }
+    }
   };
 
-  const handleDeleteObserver = (observer: Observer) => {
-    if (window.confirm(`(Demo) Smazat pozorovatele ${observer.name}?`)) {
-      showToast('Demo: Pozorovatel by byl smazán', 'info');
+  const handleDeleteObserver = async (observer: Observer) => {
+    if (window.confirm(`Opravdu chcete trvale smazat pozorovatele ${observer.name}? Tato akce je nevratná.`)) {
+      try {
+        // Nejprve odebrat z hlasování, pokud je přiřazen
+        if (voteObserverIds.includes(observer.id)) {
+          await removeObserverFromVote({ variables: { vote_id: vote.id, observer_id: observer.id } });
+        }
+        await deleteObserver({ variables: { id: observer.id } });
+        showToast('Pozorovatel byl smazán.', 'success');
+        refetchObservers();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Neznámá chyba';
+        showToast(`Chyba při mazání pozorovatele: ${message}`, 'error');
+      }
     }
   };
 
   const sendObserverInvitation = async (observer: Observer, isResend = false) => {
     try {
-      const appBase = window.location.origin;
-      // Jednoduchý proklik do aplikace s kontextem hlasování; finální veřejný pohled lze doplnit později
-      const ctaUrl = `${appBase}/?observe=${encodeURIComponent(vote.id)}&observer=${encodeURIComponent(observer.id)}`;
-  const subject = `${isResend ? 'Znovu: ' : ''}Pozvánka k sledování hlasování - ${vote.title}`;
-      const html = `
-        <!DOCTYPE html>
-        <html><head><meta charset="utf-8"><title>Pozvánka pro pozorovatele</title></head>
-        <body style="font-family:Arial,sans-serif;color:#111;line-height:1.6">
-          <div style="max-width:640px;margin:0 auto;padding:16px">
-            <h2>Byl(a) jste přidán(a) jako pozorovatel</h2>
-            <p>Hlasování: <strong>${vote.title}</strong></p>
-            ${vote.description ? `<p>${vote.description}</p>` : ''}
-            <p>
-              Klikněte pro otevření aplikace a sledování průběhu:
-            </p>
-            <p>
-              <a href="${ctaUrl}" style="display:inline-block;background:#4F46E5;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:bold">Otevřít sledování</a>
-            </p>
-            <p style="color:#555;font-size:14px">Pokud tlačítko nefunguje, zkopírujte odkaz do prohlížeče:<br>${ctaUrl}</p>
-          </div>
-        </body></html>`;
-
-      const result = await sendEmailViaGmail({ to: observer.email, subject, html });
-      if (result.success) {
-        showToast(`Pozvánka ${isResend ? 'znovu ' : ''}odeslána na ${observer.email}`, 'success');
-      } else {
-        showToast(`E‑mail se nepodařilo odeslat: ${result.error || 'neznámá chyba'}`, 'error');
-      }
-    } catch (e) {
-      showToast(`Chyba při odesílání pozvánky: ${e instanceof Error ? e.message : 'neznámá chyba'}`, 'error');
+      await sendInvitation({ variables: { vote_id: vote.id, observer_id: observer.id, resend: isResend } });
+      showToast(`Pozvánka ${isResend ? 'znovu ' : ''}odeslána na ${observer.email}`, 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Neznámá chyba';
+      showToast(`Chyba při odesílání pozvánky: ${message}`, 'error');
     }
   };
+
+  if (observersLoading) {
+    return <p>Načítání pozorovatelů...</p>;
+  }
+
 
   return (
     <div className="space-y-6">

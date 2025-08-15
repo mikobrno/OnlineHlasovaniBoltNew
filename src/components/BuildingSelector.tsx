@@ -1,30 +1,36 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Building2, Plus, MapPin, Users, Settings } from 'lucide-react';
 import { useQuery } from '@apollo/client';
-import { GET_BUILDINGS_QUERY } from '../graphql/queries';
-import { useApp } from '../contexts/AppContext';
+import { GET_BUILDINGS, type Building } from '../graphql/buildings';
 import { Card } from './common/Card';
 import { Button } from './common/Button';
-import { BuildingManager } from './admin/BuildingManager';
-import { BuildingEditor } from './admin/BuildingEditor';
+// import { BuildingManager } from './admin/BuildingManager'; // Bude refaktorováno později
+// import { BuildingEditor } from './admin/BuildingEditor'; // Bude refaktorováno později
 import { useToast } from '../contexts/ToastContext';
-import type { Building } from '../contexts/AppContext';
 
-export const BuildingSelector: React.FC = () => {
-  const { selectBuilding } = useApp();
-  const [showBuildingManager, setShowBuildingManager] = React.useState(false);
-  const [showBuildingEditor, setShowBuildingEditor] = React.useState(false);
-  const navigate = useNavigate();
+interface BuildingSelectorProps {
+  onBuildingSelect: (building: Building) => void;
+}
+
+export const BuildingSelector: React.FC<BuildingSelectorProps> = ({ onBuildingSelect }) => {
+  // const [showBuildingManager, setShowBuildingManager] = React.useState(false); // Bude refaktorováno později
+  // const [showBuildingEditor, setShowBuildingEditor] = React.useState(false); // Bude refaktorováno později
   const { showToast } = useToast();
   const [seeding, setSeeding] = React.useState(false);
 
   // Načtení budov pomocí GraphQL
-  const { data, loading, error } = useQuery(GET_BUILDINGS_QUERY);
-  const buildings = data?.buildings || [];
+  const { data, loading, error } = useQuery(GET_BUILDINGS);
+  const buildings: Building[] = data?.buildings || [];
 
-  // Seed demo data není v produkci dostupné
+  // Seed demo data bude potřeba refaktorovat s GraphQL mutacemi
+  const seedDemoData = () => {
+    setSeeding(true);
+    showToast('Funkce pro demo data se připravuje.', 'info');
+    // Zde bude logika pro naplnění dat pomocí GraphQL
+    setTimeout(() => setSeeding(false), 2000); // Simulace
+  };
 
+  /*  Bude refaktorováno později
   if (showBuildingManager) {
     return <BuildingManager onBack={() => setShowBuildingManager(false)} />;
   }
@@ -32,6 +38,7 @@ export const BuildingSelector: React.FC = () => {
   if (showBuildingEditor) {
     return <BuildingEditor onBack={() => setShowBuildingEditor(false)} />;
   }
+  */
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
@@ -44,7 +51,7 @@ export const BuildingSelector: React.FC = () => {
             </div>
           </div>
           <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-            OnlineSprava
+            OnlineHlasovani
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
             Vyberte budovu pro správu hlasování a komunikace s vlastníky
@@ -63,15 +70,10 @@ export const BuildingSelector: React.FC = () => {
                 </div>
                 <div className="ml-3">
                   <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-                    Chyba databáze
+                    Chyba při načítání budov
                   </h3>
                   <div className="mt-2 text-sm text-red-700 dark:text-red-300">
-                    <p>{error}</p>
-                    {error.includes('neexistují') && (
-                      <p className="mt-2">
-                        <strong>Řešení:</strong> Spusť SQL schema v Nhost Console - viz soubor <code>NHOST_SETUP.md</code>
-                      </p>
-                    )}
+                    <p>{error.message}</p>
                   </div>
                 </div>
               </div>
@@ -90,14 +92,22 @@ export const BuildingSelector: React.FC = () => {
         )}
 
         {/* Buildings Grid */}
+        {!loading && !error && buildings.length === 0 && (
+            <div className="text-center py-12">
+                <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300">Nebyly nalezeny žádné budovy</h3>
+                <p className="text-gray-500 dark:text-gray-400 mt-2 mb-6">Začněte tím, že přidáte první budovu.</p>
+                <Button onClick={() => showToast('Funkce pro přidání budovy se připravuje.', 'info')}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Přidat novou budovu
+                </Button>
+            </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
           {buildings.map((building) => (
             <Card
               key={building.id}
-              onClick={async () => {
-                await selectBuilding(building);
-                navigate('/');
-              }}
+              onClick={() => onBuildingSelect(building)}
               className="group hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer border-0 shadow-lg bg-white dark:bg-gray-800"
             >
               <div className="p-8">
@@ -122,7 +132,8 @@ export const BuildingSelector: React.FC = () => {
                     
                     <div className="flex items-center justify-center text-gray-600 dark:text-gray-400">
                       <Users className="w-4 h-4 mr-2" />
-                      <span className="text-sm">{building.totalUnits} jednotek</span>
+                      {/* Informace o počtu jednotek bude přidána později, pokud bude potřeba */}
+                      <span className="text-sm">Spravovat</span>
                     </div>
                   </div>
 
@@ -137,37 +148,36 @@ export const BuildingSelector: React.FC = () => {
             </Card>
           ))}
 
-          {/* Add New Building Card */}
-          <Card 
-            onClick={() => setShowBuildingEditor(true)}
-            className="group hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 bg-gray-50 dark:bg-gray-800/50"
-          >
-            <div className="p-8 text-center">
-              <div className="flex items-center justify-center mb-6">
-                <div className="bg-gray-200 dark:bg-gray-700 p-4 rounded-xl group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 transition-colors">
-                  <Plus className="w-8 h-8 text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+          {/* Add New Building Card - bude refaktorováno */}
+          {buildings.length > 0 && (
+            <Card 
+                onClick={() => showToast('Funkce pro přidání budovy se připravuje.', 'info')}
+                className="group hover:shadow-xl hover:scale-105 transition-all duration-300 cursor-pointer border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400 bg-gray-50 dark:bg-gray-800/50"
+            >
+                <div className="p-8 text-center">
+                <div className="flex items-center justify-center mb-6">
+                    <div className="bg-gray-200 dark:bg-gray-700 p-4 rounded-xl group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50 transition-colors">
+                    <Plus className="w-8 h-8 text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
+                    </div>
                 </div>
-              </div>
-              
-              <h3 className="text-xl font-semibold text-gray-600 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-3">
-                Přidat budovu
-              </h3>
-              
-              <p className="text-sm text-gray-500 dark:text-gray-500 mb-6">
-                Vytvořte novou budovu pro správu
-              </p>
+                
+                <h3 className="text-xl font-semibold text-gray-600 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors mb-3">
+                    Přidat budovu
+                </h3>
+                
+                <p className="text-sm text-gray-500 dark:text-gray-500 mb-6">
+                    Vytvořte novou budovu pro správu
+                </p>
 
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button variant="secondary" size="sm" className="w-full" onClick={(e) => {
-                  e?.stopPropagation();
-                  setShowBuildingEditor(true);
-                }}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nová budova
-                </Button>
-              </div>
-            </div>
-          </Card>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="secondary" size="sm" className="w-full">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Nová budova
+                    </Button>
+                </div>
+                </div>
+            </Card>
+          )}
         </div>
 
         {/* Quick Actions */}
@@ -177,7 +187,7 @@ export const BuildingSelector: React.FC = () => {
               variant="ghost" 
               size="sm" 
               className="flex items-center space-x-2"
-              onClick={() => setShowBuildingManager(true)}
+              onClick={() => showToast('Správa budov se připravuje.', 'info')}
             >
               <Settings className="w-4 h-4" />
               <span>Spravovat budovy</span>
@@ -187,7 +197,7 @@ export const BuildingSelector: React.FC = () => {
               variant="ghost" 
               size="sm" 
               className="flex items-center space-x-2"
-              onClick={() => setShowBuildingEditor(true)}
+              onClick={() => showToast('Přidání budovy se připravuje.', 'info')}
             >
               <Plus className="w-4 h-4" />
               <span>Přidat budovu</span>

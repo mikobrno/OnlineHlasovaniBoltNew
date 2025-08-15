@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Upload, X, FileText, Paperclip } from 'lucide-react';
-import { Vote } from '../../data/mockData';
-import { useApp } from '../../hooks/useApp';
+import { useMutation } from '@apollo/client';
+import { Vote, Member } from '../../types';
+import { ADD_MANUAL_VOTE } from '../../graphql/mutations';
 import { useToast } from '../../contexts/ToastContext';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
@@ -11,32 +12,34 @@ interface ManualVoteEntryModalProps {
   isOpen: boolean;
   onClose: () => void;
   vote: Vote;
-  memberId: string;
+  member: Member;
 }
 
 export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
   isOpen,
   onClose,
   vote,
-  memberId
+  member
 }) => {
-  const { members, castVote } = useApp();
   const { showToast } = useToast();
+  const [addManualVote, { loading: isSubmitting }] = useMutation(ADD_MANUAL_VOTE);
+
   const [answers, setAnswers] = useState<Record<string, 'yes' | 'no' | 'abstain'>>({});
-  const [attachments, setAttachments] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<string[]>([]); // TODO: Změnit na File[] pro upload
   const [note, setNote] = useState('');
 
-  const buildingMembers = members.filter(m => m.buildingId === vote.buildingId);
-  const member = buildingMembers.find(m => m.id === memberId);
-  const currentVotes = useMemo(() => vote.memberVotes[memberId] || {}, [vote.memberVotes, memberId]);
-  const currentAttachments = useMemo(() => vote.manualVoteAttachments?.[memberId] || [], [vote.manualVoteAttachments, memberId]);
-  const currentNote = useMemo(() => vote.manualVoteNotes?.[memberId] || '', [vote.manualVoteNotes, memberId]);
+  // TODO: Načíst existující hlas z vote objektu, až bude dostupný
+  const currentVotes = useMemo(() => ({}), []); // vote.memberVotes[member.id] || {}
+  const currentAttachments = useMemo(() => [], []); // vote.manualVoteAttachments?.[member.id] || []
+  const currentNote = useMemo(() => '', []); // vote.manualVoteNotes?.[member.id] || ''
 
   useEffect(() => {
-    setAnswers(currentVotes);
-    setAttachments(currentAttachments);
-    setNote(currentNote);
-  }, [currentVotes, currentAttachments, currentNote]);
+    if (isOpen) {
+      setAnswers(currentVotes);
+      setAttachments(currentAttachments);
+      setNote(currentNote);
+    }
+  }, [isOpen, currentVotes, currentAttachments, currentNote]);
 
   const handleAnswerChange = (questionId: string, answer: 'yes' | 'no' | 'abstain') => {
     setAnswers(prev => ({
@@ -45,7 +48,7 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
     }));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!member) return;
 
     const allAnswered = vote.questions.every(q => answers[q.id]);
@@ -54,10 +57,23 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
       return;
     }
 
-  // TODO: rozšířit castVote o přílohy a poznámky v nové implementaci
-  castVote(vote.id, memberId, answers);
-    showToast(`Hlas za ${member.name} byl zaznamenán`, 'success');
-    onClose();
+    try {
+      await addManualVote({
+        variables: {
+          vote_id: vote.id,
+          member_id: member.id,
+          answers: answers,
+          note: note,
+          // TODO: Implementovat nahrávání souborů a posílat správná data
+          attachments: attachments 
+        }
+      });
+      showToast(`Hlas za ${member.name} byl zaznamenán`, 'success');
+      onClose();
+    } catch (error: any) {
+      console.error('Error submitting manual vote:', error);
+      showToast(`Chyba při ukládání hlasu: ${error.message}`, 'error');
+    }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,7 +98,7 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
             Zadat hlas za: {member.name}
           </h4>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Jednotka: {member.unit} | Váha hlasu: {member.voteWeight}
+            Jednotka: {member.unit} | Váha hlasu: {member.vote_weight}
           </p>
         </div>
 
@@ -103,6 +119,7 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
                       checked={answers[question.id] === option}
                       onChange={() => handleAnswerChange(question.id, option)}
                       className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 dark:border-gray-600 dark:focus:ring-blue-600 dark:bg-gray-700"
+                      disabled={isSubmitting}
                     />
                     <span className="text-sm text-gray-700 dark:text-gray-300">
                       {option === 'yes' && 'Ano'}
@@ -130,6 +147,7 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="např. Plná moc od 15.1.2024, Hlasovací lístek předán osobně..."
+                disabled={isSubmitting}
               />
             </div>
 
@@ -148,12 +166,14 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
                     aria-label="Přidat soubory k ručnímu hlasu"
                     title="Přidat soubory"
+                    disabled={isSubmitting}
                   />
                   <Button
                     type="button"
                     variant="secondary"
                     size="sm"
                     onClick={() => document.getElementById('manual-vote-upload')?.click()}
+                    disabled={isSubmitting}
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     Přidat soubory
@@ -176,6 +196,7 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
                         variant="ghost"
                         size="sm"
                         onClick={() => removeAttachment(index)}
+                        disabled={isSubmitting}
                       >
                         <X className="w-4 h-4" />
                       </Button>
@@ -206,11 +227,11 @@ export const ManualVoteEntryModal: React.FC<ManualVoteEntryModalProps> = ({
         </div>
 
         <div className="flex justify-end space-x-3">
-          <Button variant="secondary" onClick={onClose} title="Zavřít bez uložení">
+          <Button variant="secondary" onClick={onClose} title="Zavřít bez uložení" disabled={isSubmitting}>
             Zrušit
           </Button>
-          <Button onClick={handleSubmit} title="Uložit ruční hlas za člena">
-            Zadat hlas
+          <Button onClick={handleSubmit} title="Uložit ruční hlas za člena" disabled={isSubmitting}>
+            {isSubmitting ? 'Ukládání...' : 'Zadat hlas'}
           </Button>
         </div>
       </div>

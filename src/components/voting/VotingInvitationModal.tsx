@@ -1,36 +1,52 @@
-import React, { useState } from 'react';
-import { Mail, MessageSquare, Send, CheckCircle, AlertCircle } from 'lucide-react';
-import { Vote } from '../../data/mockData';
-import { useApp } from '../../hooks/useApp';
+import React, { useState, useEffect } from 'react';
+import { Mail, Send, CheckCircle, AlertCircle } from 'lucide-react';
+import { useQuery } from '@apollo/client';
+import { GET_DATA_FOR_INVITATION_MODAL } from '../../graphql/queries';
+import { Vote, Member, EmailTemplate, GlobalVariable, Building } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
 import { votingTokenService } from '../../lib/votingTokenService';
-import { smsService } from '../../lib/smsService';
+// import { smsService } from '../../lib/smsService'; // Budeme řešit později
 import { replaceVariables } from '../../lib/utils';
 
 interface VotingInvitationModalProps {
   isOpen: boolean;
   onClose: () => void;
   vote: Vote;
+  buildingId: string;
 }
 
 export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
   isOpen,
   onClose,
-  vote
+  vote,
+  buildingId,
 }) => {
-  const { members, selectedBuilding, templates, globalVariables } = useApp();
   const { showToast } = useToast();
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [sendingStatus, setSendingStatus] = useState<Record<string, 'pending' | 'sending' | 'sent' | 'error'>>({});
   const [isSending, setIsSending] = useState(false);
 
-  const buildingMembers = members.filter(m => m.buildingId === vote.buildingId);
-  const availableTemplates = templates.filter(t => 
-    t.isGlobal || t.buildingId === selectedBuilding?.id
-  );
+  const { data, loading, error } = useQuery(GET_DATA_FOR_INVITATION_MODAL, {
+    variables: { buildingId },
+    skip: !isOpen,
+  });
+
+  const building: Building & { members: Member[] } = data?.building;
+  const availableTemplates: EmailTemplate[] = data?.email_templates || [];
+  const globalVariables: GlobalVariable[] = data?.global_variables || [];
+  const buildingMembers = building?.members || [];
+
+  useEffect(() => {
+    // Reset state when modal opens or data changes
+    if (isOpen) {
+      setSelectedTemplateId('');
+      setSendingStatus({});
+      setIsSending(false);
+    }
+  }, [isOpen, data]);
 
   const generateVotingLink = (token: string): string => {
     return `${window.location.origin}/vote/${token}`;
@@ -38,7 +54,7 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
 
   const sendInvitationToMember = async (memberId: string): Promise<boolean> => {
     const member = buildingMembers.find(m => m.id === memberId);
-    if (!member) return false;
+    if (!member || !building) return false;
 
     setSendingStatus(prev => ({ ...prev, [memberId]: 'sending' }));
 
@@ -52,32 +68,28 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
         throw new Error('Šablona nebyla nalezena');
       }
 
-      const customVariables = {
-        odkaz_na_hlasovani: votingLink,
-        odkaz_s_hlasovanim: votingLink, // alias podporovaný v replaceVariables
-        overovaci_kod: votingToken.verificationCode
-      };
+      const allVariables = [
+        ...globalVariables.map(gv => ({ name: gv.name, value: gv.value })),
+        { name: 'jmeno_prijmeni', value: member.name },
+        { name: 'email', value: member.email },
+        { name: 'nazev_budovy', value: building.name },
+        { name: 'adresa_budovy', value: building.address },
+        { name: 'nazev_hlasovani', value: vote.title },
+        { name: 'odkaz_hlasovani', value: votingLink },
+        { name: 'datum_zacatku', value: new Date(vote.start_date).toLocaleDateString() },
+        { name: 'datum_konce', value: new Date(vote.end_date).toLocaleDateString() },
+      ];
 
-      const emailSubject = replaceVariables(
-        template.subject, 
-        globalVariables, 
-        selectedBuilding!, 
-        member, 
-        vote, 
-        customVariables
-      );
+      const emailSubject = replaceVariables(template.subject, allVariables);
+      const emailBody = replaceVariables(template.body, allVariables);
 
-      const emailBody = replaceVariables(
-        template.body, 
-        globalVariables, 
-        selectedBuilding!, 
-        member, 
-        vote, 
-        customVariables
-      );
-
-      // Simulate email sending (in real app, this would be actual email service)
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // TODO: Implement actual email sending via Nhost function
+      console.log('Sending email:', {
+        to: member.email,
+        subject: emailSubject,
+        body: emailBody,
+      });
+      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
       
       setSendingStatus(prev => ({ ...prev, [memberId]: 'sent' }));
       return true;
@@ -105,7 +117,7 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
     });
     setSendingStatus(initialStatus);
 
-    // Send invitations sequentially to avoid overwhelming services
+    // Send invitations sequentially
     for (const member of buildingMembers) {
       const success = await sendInvitationToMember(member.id);
       if (success) {
@@ -113,9 +125,6 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
       } else {
         errorCount++;
       }
-      
-      // Small delay between sends
-      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     setIsSending(false);
@@ -149,6 +158,22 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
     }
   };
 
+  if (loading && isOpen) {
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Odeslat pozvánky k hlasování" size="lg">
+            <p>Načítání dat...</p>
+        </Modal>
+    );
+  }
+
+  if (error && isOpen) {
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Chyba" size="lg">
+            <p>Nepodařilo se načíst data pro odeslání pozvánek: {error.message}</p>
+        </Modal>
+    );
+  }
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Odeslat pozvánky k hlasování" size="lg">
       <div className="space-y-6">
@@ -166,10 +191,11 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          <label htmlFor="email-template-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             E-mailová šablona *
           </label>
           <select
+            id="email-template-select"
             value={selectedTemplateId}
             onChange={(e) => setSelectedTemplateId(e.target.value)}
             className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -178,7 +204,7 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
             <option value="">Vyberte šablonu</option>
             {availableTemplates.map((template) => (
               <option key={template.id} value={template.id}>
-                {template.name} {template.isGlobal ? '(Globální)' : ''}
+                {template.name} {template.is_global ? '(Globální)' : ''}
               </option>
             ))}
           </select>
@@ -195,7 +221,7 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
             </h4>
             <Button
               onClick={sendAllInvitations}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={isSending || !selectedTemplateId}
               size="sm"
             >
               <Send className="w-4 h-4 mr-2" />
@@ -213,17 +239,8 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
                       {member.name}
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">
-                      {member.email} | {member.unit}
-                      {member.phone && (
-                        <span className="ml-2 text-green-600 dark:text-green-400">
-                          📱 SMS: {member.phone}
-                        </span>
-                      )}
-                      {!member.phone && (
-                        <span className="ml-2 text-yellow-600 dark:text-yellow-400">
-                          ⚠️ Bez telefonu
-                        </span>
-                      )}
+                      {member.email}
+                      {/* TODO: Doplnit telefon a další info, až budou v DB */}
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -246,7 +263,7 @@ export const VotingInvitationModal: React.FC<VotingInvitationModalProps> = ({
             <p>• Členové bez telefonního čísla nebudou moci hlasovat (chybí SMS ověření)</p>
             <p>• Členové se zástupcem dostanou pouze notifikaci, hlasovací odkaz půjde zástupci</p>
             <p>• SMS se odešle až když člen klikne na odkaz a požádá o kód</p>
-            <p>• Ujistěte se, že máte nakonfigurované SMS služby (SMSbrana.cz)</p>
+            <p>• Ujistěte se, že máte nakonfigurované SMS služby (např. přes Nhost funkci)</p>
             <p>• Každé odeslání pozvánek vygeneruje nové unikátní odkazy</p>
           </div>
         </div>

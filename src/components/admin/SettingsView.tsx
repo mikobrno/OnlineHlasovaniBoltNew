@@ -1,203 +1,256 @@
-import React, { useState } from 'react';
-import { Save, RotateCcw, Globe, Mail, Shield, Database, Bell, Palette, Send, TestTube, CreditCard } from 'lucide-react';
+import { useState } from 'react';
+import { Save, RotateCcw, Globe, Shield, Database, Bell, Palette, Send, TestTube, CreditCard } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
-import { smsService } from '../../lib/smsService';
+import { useQuery, useMutation, useLazyQuery } from '@apollo/client';
+import { GET_SETTINGS, UPDATE_SETTINGS } from '../../graphql/settings';
+import { SEND_TEST_SMS_MUTATION, GET_SMS_CREDIT_QUERY, TEST_SMS_CONNECTION_QUERY } from '../../graphql/sms';
 
-interface AppSettings {
-  // Obecné nastavení
+// Definice typů pro jednotlivé sekce nastavení
+interface GeneralSettings {
   appName: string;
   appDescription: string;
   defaultLanguage: string;
   timezone: string;
-  
-  // SMS nastavení
-  smsProvider: string;
-  smsUsername: string;
-  smsPassword: string;
-  
-  // Bezpečnost
+}
+
+interface SmsSettings {
+  provider: string;
+  username: string;
+  password?: string; // Heslo je citlivý údaj, nemusí být vždy posíláno
+}
+
+interface SecuritySettings {
   sessionTimeout: number;
   maxLoginAttempts: number;
   passwordMinLength: number;
   requireTwoFactor: boolean;
-  
-  // Notifikace
+}
+
+interface NotificationSettings {
   emailNotifications: boolean;
   smsNotifications: boolean;
   browserNotifications: boolean;
-  
-  // Vzhled
+}
+
+interface AppearanceSettings {
   defaultTheme: 'light' | 'dark' | 'system';
   primaryColor: string;
   logoUrl: string;
 }
 
-const defaultSettings: AppSettings = {
-  appName: 'OnlineSprava',
-  appDescription: 'Systém pro správu hlasování a komunikace v SVJ/BD',
-  defaultLanguage: 'cs',
-  timezone: 'Europe/Prague',
-  
-  smsProvider: 'smsbrana',
-  smsUsername: '',
-  smsPassword: '',
-  
-  sessionTimeout: 30,
-  maxLoginAttempts: 5,
-  passwordMinLength: 8,
-  requireTwoFactor: false,
-  
-  emailNotifications: true,
-  smsNotifications: true,
-  browserNotifications: false,
-  
-  defaultTheme: 'system',
-  primaryColor: '#3b82f6',
-  logoUrl: ''
+// Hlavní typ pro všechna nastavení
+type AppSettings = {
+  general: GeneralSettings;
+  sms: SmsSettings;
+  security: SecuritySettings;
+  notifications: NotificationSettings;
+  appearance: AppearanceSettings;
 };
 
-export const SettingsView: React.FC = () => {
+const initialSettings: AppSettings = {
+    general: { appName: '', appDescription: '', defaultLanguage: 'cs', timezone: 'Europe/Prague' },
+    sms: { provider: 'smsbrana', username: '', password: '' },
+    security: { sessionTimeout: 30, maxLoginAttempts: 5, passwordMinLength: 8, requireTwoFactor: false },
+    notifications: { emailNotifications: true, smsNotifications: true, browserNotifications: false },
+    appearance: { defaultTheme: 'system', primaryColor: '#3b82f6', logoUrl: '' },
+};
+
+export const SettingsView = () => {
   const { showToast } = useToast();
-  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [activeSection, setActiveSection] = useState<string>('general');
+  const [settings, setSettings] = useState<AppSettings>(initialSettings);
+  const [originalSettings, setOriginalSettings] = useState<AppSettings>(initialSettings);
+  const [activeSection, setActiveSection] = useState<keyof AppSettings | 'database'>('general');
   
   // SMS test state
   const [testPhone, setTestPhone] = useState('');
   const [testMessage, setTestMessage] = useState('Testovací SMS z OnlineSpráva aplikace. SMS služba funguje správně!');
-  const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [creditInfo, setCreditInfo] = useState<{ credit?: number; message: string } | null>(null);
-  const [isLoadingCredit, setIsLoadingCredit] = useState(false);
 
-  const handleSettingChange = (key: keyof AppSettings, value: any) => {
+  const { loading: loadingSettings, error: settingsError } = useQuery(GET_SETTINGS, {
+    onCompleted: (data) => {
+      if (data && data.settings) {
+        const fetchedSettingsAsObject = data.settings.reduce((obj: Record<string, unknown>, item: { key: string; value: unknown }) => {
+            obj[item.key] = item.value;
+            return obj;
+        }, {});
+        
+        const newSettings: AppSettings = {
+            general: { ...initialSettings.general, ...(fetchedSettingsAsObject.general as Partial<GeneralSettings> || {}) },
+            sms: { ...initialSettings.sms, ...(fetchedSettingsAsObject.sms as Partial<SmsSettings> || {}) },
+            security: { ...initialSettings.security, ...(fetchedSettingsAsObject.security as Partial<SecuritySettings> || {}) },
+            notifications: { ...initialSettings.notifications, ...(fetchedSettingsAsObject.notifications as Partial<NotificationSettings> || {}) },
+            appearance: { ...initialSettings.appearance, ...(fetchedSettingsAsObject.appearance as Partial<AppearanceSettings> || {}) },
+        };
+
+        if (!newSettings.sms.password) {
+            newSettings.sms.password = '';
+        }
+
+        setSettings(newSettings);
+        const deepClonedSettings = JSON.parse(JSON.stringify(newSettings));
+        if (deepClonedSettings.sms.password) {
+            deepClonedSettings.sms.password = '';
+        }
+        setOriginalSettings(deepClonedSettings);
+      }
+    },
+    onError: (error) => {
+        showToast(`Chyba při načítání nastavení: ${error.message}`, 'error');
+    }
+  });
+
+  const [updateSettingsMutation, { loading: isSaving }] = useMutation(UPDATE_SETTINGS);
+  
+  const [sendTestSms, { loading: isSendingSms }] = useMutation(SEND_TEST_SMS_MUTATION, {
+    onCompleted: (data) => {
+        const result = data.sendTestSms;
+        showToast(result.message, result.success ? 'success' : 'error');
+    },
+    onError: (error) => showToast(`Chyba: ${error.message}`, 'error')
+  });
+
+  const [getSmsCredit, { loading: isLoadingCredit }] = useLazyQuery(GET_SMS_CREDIT_QUERY, {
+      onCompleted: (data) => {
+          const result = data.getSmsCredit;
+          showToast(result.message, result.success ? 'success' : 'error');
+      },
+      onError: (error) => showToast(`Chyba: ${error.message}`, 'error')
+  });
+
+  const [testSmsConnection, { loading: isTestingConnection }] = useLazyQuery(TEST_SMS_CONNECTION_QUERY, {
+      onCompleted: (data) => {
+          const result = data.testSmsConnection;
+          showToast(result.message, result.success ? 'success' : 'error');
+      },
+      onError: (error) => showToast(`Chyba: ${error.message}`, 'error')
+  });
+
+
+  const handleSettingChange = <T extends keyof AppSettings, K extends keyof AppSettings[T]>(
+    section: T,
+    key: K,
+    value: AppSettings[T][K]
+  ) => {
     setSettings(prev => ({
       ...prev,
-      [key]: value
+      [section]: {
+        ...prev[section],
+        [key]: value,
+      },
     }));
-    setHasChanges(true);
   };
 
-  const handleSave = () => {
-    // V reálné aplikaci by se zde uložilo do databáze
-    console.log('Saving settings:', settings);
-    setHasChanges(false);
-    showToast('Nastavení bylo uloženo', 'success');
+  const handleSave = async (section: keyof AppSettings) => {
+    const dataToSave = { ...settings[section] };
+    
+    if (section === 'sms' && (dataToSave as SmsSettings).password === '') {
+        delete (dataToSave as SmsSettings).password;
+    }
+
+    try {
+      await updateSettingsMutation({ variables: { key: section, value: dataToSave } });
+      showToast('Nastavení bylo uloženo', 'success');
+      
+      const newSectionState = { ...settings[section] };
+      if (section === 'sms') {
+          (newSectionState as SmsSettings).password = '';
+      }
+      
+      const newOriginalSettings = { ...originalSettings, [section]: newSectionState };
+      setOriginalSettings(newOriginalSettings);
+
+    } catch (error) {
+      console.error('Chyba při ukládání nastavení:', error);
+      showToast('Nepodařilo se uložit nastavení', 'error');
+    }
   };
 
-  const handleReset = () => {
-    setSettings(defaultSettings);
-    setHasChanges(false);
-    showToast('Nastavení bylo resetováno', 'info');
+  const handleReset = (section: keyof AppSettings) => {
+    setSettings(prev => ({
+        ...prev,
+        [section]: originalSettings[section]
+    }));
+    showToast('Změny byly zrušeny', 'info');
   };
+
+  const hasChanges = (section: keyof AppSettings) => {
+      if (!originalSettings[section]) return false;
+      return JSON.stringify(settings[section]) !== JSON.stringify(originalSettings[section]);
+  }
 
   // SMS test functions
-  const handleTestSMS = async () => {
+  const handleTestSMS = () => {
     if (!testPhone.trim()) {
       showToast('Zadejte telefonní číslo', 'error');
       return;
     }
-
-    setIsTesting(true);
-    setTestResult(null);
-
-    try {
-      const result = await smsService.sendSMS(testPhone, testMessage);
-      setTestResult(result);
-      
-      if (result.success) {
-        showToast('Test SMS byla úspěšně odeslána!', 'success');
-      } else {
-        showToast(`Chyba při odesílání: ${result.message}`, 'error');
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      setTestResult({ success: false, message: errorMessage });
-      showToast(`Chyba při odesílání: ${errorMessage}`, 'error');
-    } finally {
-      setIsTesting(false);
-    }
+    sendTestSms({ variables: { to: testPhone, message: testMessage } });
   };
 
-  const handleTestConnection = async () => {
-    setIsTesting(true);
-    
-    try {
-      const isConnected = await smsService.testConnection();
-      
-      if (isConnected) {
-        showToast('Připojení k SMSbrana.cz je funkční!', 'success');
-      } else {
-        showToast('Připojení k SMSbrana.cz se nezdařilo', 'error');
-      }
-    } catch (error) {
-      showToast('Chyba při testování připojení', 'error');
-    } finally {
-      setIsTesting(false);
-    }
-  };
-
-  const handleGetCredit = async () => {
-    setIsLoadingCredit(true);
-    
-    try {
-      const creditResult = await smsService.getCredit();
-      setCreditInfo(creditResult);
-      
-      if (creditResult.success) {
-        showToast(creditResult.message, 'success');
-      } else {
-        showToast(`Chyba při zjišťování kreditu: ${creditResult.message}`, 'error');
-      }
-    } catch (error) {
-      showToast('Chyba při komunikaci se službou', 'error');
-    } finally {
-      setIsLoadingCredit(false);
-    }
-  };
+  const handleTestConnection = () => testSmsConnection();
+  const handleGetCredit = () => getSmsCredit();
 
   const sections = [
-    { id: 'general', label: 'Obecné', icon: <Globe className="w-4 h-4" /> },
-    { id: 'sms', label: 'SMS', icon: <div className="w-4 h-4 flex items-center justify-center text-xs">📱</div> },
-    { id: 'security', label: 'Bezpečnost', icon: <Shield className="w-4 h-4" /> },
-    { id: 'notifications', label: 'Notifikace', icon: <Bell className="w-4 h-4" /> },
-    { id: 'appearance', label: 'Vzhled', icon: <Palette className="w-4 h-4" /> },
-    { id: 'database', label: 'Databáze', icon: <Database className="w-4 h-4" /> }
+    { id: 'general' as const, label: 'Obecné', icon: <Globe className="w-4 h-4" /> },
+    { id: 'sms' as const, label: 'SMS', icon: <div className="w-4 h-4 flex items-center justify-center text-xs">📱</div> },
+    { id: 'security' as const, label: 'Bezpečnost', icon: <Shield className="w-4 h-4" /> },
+    { id: 'notifications' as const, label: 'Notifikace', icon: <Bell className="w-4 h-4" /> },
+    { id: 'appearance' as const, label: 'Vzhled', icon: <Palette className="w-4 h-4" /> },
+    { id: 'database' as const, label: 'Databáze', icon: <Database className="w-4 h-4" /> }
   ];
+
+  const renderSectionHeader = (title: string, sectionKey: keyof AppSettings) => (
+    <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+            {title}
+        </h3>
+        {hasChanges(sectionKey) && (
+            <div className="flex space-x-2">
+                <Button variant="secondary" onClick={() => handleReset(sectionKey)} size="sm" disabled={isSaving}>
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Zrušit
+                </Button>
+                <Button onClick={() => handleSave(sectionKey)} size="sm" disabled={isSaving}>
+                    <Save className="w-4 h-4 mr-2" />
+                    {isSaving ? 'Ukládání...' : 'Uložit'}
+                </Button>
+            </div>
+        )}
+    </div>
+  );
 
   const renderGeneralSettings = () => (
     <Card className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-        Obecné nastavení
-      </h3>
+      {renderSectionHeader('Obecné nastavení', 'general')}
       <div className="space-y-4">
         <Input
           label="Název aplikace"
-          value={settings.appName}
-          onChange={(e) => handleSettingChange('appName', e.target.value)}
+          value={settings.general.appName}
+          onChange={(e) => handleSettingChange('general', 'appName', e.target.value)}
         />
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label htmlFor="appDescription" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Popis aplikace
           </label>
           <textarea
-            value={settings.appDescription}
-            onChange={(e) => handleSettingChange('appDescription', e.target.value)}
+            id="appDescription"
+            value={settings.general.appDescription}
+            onChange={(e) => handleSettingChange('general', 'appDescription', e.target.value)}
             rows={3}
             className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="defaultLanguage" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Výchozí jazyk
             </label>
             <select
-              value={settings.defaultLanguage}
-              onChange={(e) => handleSettingChange('defaultLanguage', e.target.value)}
+              id="defaultLanguage"
+              value={settings.general.defaultLanguage}
+              onChange={(e) => handleSettingChange('general', 'defaultLanguage', e.target.value)}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="cs">Čeština</option>
@@ -206,12 +259,13 @@ export const SettingsView: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Časové pásmo
             </label>
             <select
-              value={settings.timezone}
-              onChange={(e) => handleSettingChange('timezone', e.target.value)}
+              id="timezone"
+              value={settings.general.timezone}
+              onChange={(e) => handleSettingChange('general', 'timezone', e.target.value)}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="Europe/Prague">Europe/Prague</option>
@@ -229,42 +283,36 @@ export const SettingsView: React.FC = () => {
   const renderSMSSettings = () => (
     <div className="space-y-6">
       <Card className="p-6">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-          SMS nastavení
-        </h3>
+        {renderSectionHeader('SMS nastavení', 'sms')}
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label htmlFor="smsProvider" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               SMS poskytovatel
             </label>
             <select
-              value={settings.smsProvider}
-              onChange={(e) => handleSettingChange('smsProvider', e.target.value)}
+              id="smsProvider"
+              value={settings.sms.provider}
+              onChange={(e) => handleSettingChange('sms', 'provider', e.target.value)}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="smsbrana">SMSbrana.cz</option>
-              <option value="twilio">Twilio</option>
-              <option value="nexmo">Vonage (Nexmo)</option>
+              <option value="twilio" disabled>Twilio (již brzy)</option>
             </select>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Uživatelské jméno"
-              value={settings.smsUsername}
-              onChange={(e) => handleSettingChange('smsUsername', e.target.value)}
+              value={settings.sms.username}
+              onChange={(e) => handleSettingChange('sms', 'username', e.target.value)}
             />
             <Input
               label="Heslo"
               type="password"
-              value={settings.smsPassword}
-              onChange={(e) => handleSettingChange('smsPassword', e.target.value)}
+              value={settings.sms.password || ''}
+              onChange={(e) => handleSettingChange('sms', 'password', e.target.value)}
+              placeholder="Zadejte pro změnu"
+              helperText="Z bezpečnostních důvodů se heslo nezobrazuje. Pro aktualizaci zadejte nové."
             />
-          </div>
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-            <p className="text-sm text-blue-800 dark:text-blue-200">
-              <strong>Poznámka:</strong> Pro SMSbrana.cz použijte přihlašovací údaje z vašeho účtu. 
-              Tyto údaje jsou také potřeba v .env souboru jako VITE_SMSBRANA_LOGIN a VITE_SMSBRANA_PASSWORD.
-            </p>
           </div>
         </div>
       </Card>
@@ -281,16 +329,16 @@ export const SettingsView: React.FC = () => {
           <div className="space-y-4">
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Test připojení a kredit</h4>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Ověří připojení k SMSbrana.cz a zobrazí dostupný kredit.
+              Ověří připojení k SMS bráně a zobrazí dostupný kredit.
             </p>
             <div className="flex space-x-2">
               <Button
                 onClick={handleTestConnection}
-                disabled={isTesting}
+                disabled={isTestingConnection}
                 variant="secondary"
                 className="flex-1"
               >
-                {isTesting ? 'Testování...' : 'Test připojení'}
+                {isTestingConnection ? 'Testování...' : 'Test připojení'}
               </Button>
               <Button
                 onClick={handleGetCredit}
@@ -301,19 +349,6 @@ export const SettingsView: React.FC = () => {
                 {isLoadingCredit ? 'Načítání...' : 'Zjistit kredit'}
               </Button>
             </div>
-            
-            {creditInfo && (
-              <div className={`p-4 rounded-lg ${
-                creditInfo.credit !== undefined 
-                  ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200' 
-                  : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
-              }`}>
-                <p className="font-medium">
-                  {creditInfo.credit !== undefined ? '💰 Kredit dostupný' : '❌ Chyba kreditu'}
-                </p>
-                <p className="text-sm mt-1">{creditInfo.message}</p>
-              </div>
-            )}
           </div>
 
           {/* Send Test SMS */}
@@ -329,10 +364,11 @@ export const SettingsView: React.FC = () => {
             />
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              <label htmlFor="testMessage" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Text zprávy
               </label>
               <textarea
+                id="testMessage"
                 value={testMessage}
                 onChange={(e) => setTestMessage(e.target.value)}
                 rows={3}
@@ -348,63 +384,44 @@ export const SettingsView: React.FC = () => {
             
             <Button
               onClick={handleTestSMS}
-              disabled={isTesting || !testPhone.trim() || !testMessage.trim()}
+              disabled={isSendingSms || !testPhone.trim() || !testMessage.trim()}
               className="w-full"
             >
               <Send className="w-4 h-4 mr-2" />
-              {isTesting ? 'Odesílání...' : 'Odeslat test SMS'}
+              {isSendingSms ? 'Odesílání...' : 'Odeslat test SMS'}
             </Button>
           </div>
         </div>
-
-        {/* Test Result */}
-        {testResult && (
-          <div className="mt-6 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Výsledek testu</h4>
-            <div className={`p-3 rounded ${
-              testResult.success 
-                ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200' 
-                : 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200'
-            }`}>
-              <p className="font-medium">
-                {testResult.success ? 'SMS úspěšně odeslána!' : 'Chyba při odesílání SMS!'}
-              </p>
-              <p className="text-sm mt-1">{testResult.message}</p>
-            </div>
-          </div>
-        )}
       </Card>
     </div>
   );
 
   const renderSecuritySettings = () => (
     <Card className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-        Bezpečnostní nastavení
-      </h3>
+      {renderSectionHeader('Bezpečnostní nastavení', 'security')}
       <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Input
             label="Timeout relace (minuty)"
             type="number"
-            value={settings.sessionTimeout}
-            onChange={(e) => handleSettingChange('sessionTimeout', parseInt(e.target.value))}
+            value={settings.security.sessionTimeout}
+            onChange={(e) => handleSettingChange('security', 'sessionTimeout', parseInt(e.target.value))}
             min="5"
             max="480"
           />
           <Input
             label="Max. pokusů o přihlášení"
             type="number"
-            value={settings.maxLoginAttempts}
-            onChange={(e) => handleSettingChange('maxLoginAttempts', parseInt(e.target.value))}
+            value={settings.security.maxLoginAttempts}
+            onChange={(e) => handleSettingChange('security', 'maxLoginAttempts', parseInt(e.target.value))}
             min="3"
             max="10"
           />
           <Input
             label="Min. délka hesla"
             type="number"
-            value={settings.passwordMinLength}
-            onChange={(e) => handleSettingChange('passwordMinLength', parseInt(e.target.value))}
+            value={settings.security.passwordMinLength}
+            onChange={(e) => handleSettingChange('security', 'passwordMinLength', parseInt(e.target.value))}
             min="6"
             max="20"
           />
@@ -413,8 +430,8 @@ export const SettingsView: React.FC = () => {
           <input
             type="checkbox"
             id="requireTwoFactor"
-            checked={settings.requireTwoFactor}
-            onChange={(e) => handleSettingChange('requireTwoFactor', e.target.checked)}
+            checked={settings.security.requireTwoFactor}
+            onChange={(e) => handleSettingChange('security', 'requireTwoFactor', e.target.checked)}
             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
           />
           <label htmlFor="requireTwoFactor" className="text-sm text-gray-700 dark:text-gray-300">
@@ -427,17 +444,15 @@ export const SettingsView: React.FC = () => {
 
   const renderNotificationSettings = () => (
     <Card className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-        Nastavení notifikací
-      </h3>
+      {renderSectionHeader('Nastavení notifikací', 'notifications')}
       <div className="space-y-4">
         <div className="space-y-3">
           <div className="flex items-center space-x-2">
             <input
               type="checkbox"
               id="emailNotifications"
-              checked={settings.emailNotifications}
-              onChange={(e) => handleSettingChange('emailNotifications', e.target.checked)}
+              checked={settings.notifications.emailNotifications}
+              onChange={(e) => handleSettingChange('notifications', 'emailNotifications', e.target.checked)}
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
             />
             <label htmlFor="emailNotifications" className="text-sm text-gray-700 dark:text-gray-300">
@@ -448,8 +463,8 @@ export const SettingsView: React.FC = () => {
             <input
               type="checkbox"
               id="smsNotifications"
-              checked={settings.smsNotifications}
-              onChange={(e) => handleSettingChange('smsNotifications', e.target.checked)}
+              checked={settings.notifications.smsNotifications}
+              onChange={(e) => handleSettingChange('notifications', 'smsNotifications', e.target.checked)}
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
             />
             <label htmlFor="smsNotifications" className="text-sm text-gray-700 dark:text-gray-300">
@@ -460,8 +475,8 @@ export const SettingsView: React.FC = () => {
             <input
               type="checkbox"
               id="browserNotifications"
-              checked={settings.browserNotifications}
-              onChange={(e) => handleSettingChange('browserNotifications', e.target.checked)}
+              checked={settings.notifications.browserNotifications}
+              onChange={(e) => handleSettingChange('notifications', 'browserNotifications', e.target.checked)}
               className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
             />
             <label htmlFor="browserNotifications" className="text-sm text-gray-700 dark:text-gray-300">
@@ -475,17 +490,16 @@ export const SettingsView: React.FC = () => {
 
   const renderAppearanceSettings = () => (
     <Card className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-        Nastavení vzhledu
-      </h3>
+      {renderSectionHeader('Nastavení vzhledu', 'appearance')}
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label htmlFor="defaultTheme" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             Výchozí téma
           </label>
           <select
-            value={settings.defaultTheme}
-            onChange={(e) => handleSettingChange('defaultTheme', e.target.value)}
+            id="defaultTheme"
+            value={settings.appearance.defaultTheme}
+            onChange={(e) => handleSettingChange('appearance', 'defaultTheme', e.target.value as AppSettings['appearance']['defaultTheme'])}
             className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="system">Podle systému</option>
@@ -501,13 +515,14 @@ export const SettingsView: React.FC = () => {
             <div className="flex space-x-2">
               <input
                 type="color"
-                value={settings.primaryColor}
-                onChange={(e) => handleSettingChange('primaryColor', e.target.value)}
+                value={settings.appearance.primaryColor}
+                onChange={(e) => handleSettingChange('appearance', 'primaryColor', e.target.value)}
                 className="w-12 h-10 rounded border border-gray-300 dark:border-gray-600"
+                title="Výběr primární barvy"
               />
               <Input
-                value={settings.primaryColor}
-                onChange={(e) => handleSettingChange('primaryColor', e.target.value)}
+                value={settings.appearance.primaryColor}
+                onChange={(e) => handleSettingChange('appearance', 'primaryColor', e.target.value)}
                 placeholder="#3b82f6"
                 className="flex-1"
               />
@@ -515,8 +530,8 @@ export const SettingsView: React.FC = () => {
           </div>
           <Input
             label="URL loga"
-            value={settings.logoUrl}
-            onChange={(e) => handleSettingChange('logoUrl', e.target.value)}
+            value={settings.appearance.logoUrl}
+            onChange={(e) => handleSettingChange('appearance', 'logoUrl', e.target.value)}
             placeholder="https://example.com/logo.png"
           />
         </div>
@@ -527,31 +542,31 @@ export const SettingsView: React.FC = () => {
   const renderDatabaseSettings = () => (
     <Card className="p-6">
       <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-        Databázové nastavení
+        Databázové operace
       </h3>
       <div className="space-y-4">
         <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
           <p className="text-sm text-yellow-800 dark:text-yellow-200">
-            <strong>Upozornění:</strong> Změny databázového nastavení mohou ovlivnit funkčnost aplikace. 
-            Doporučujeme provádět změny pouze s technickou podporou.
+            <strong>Upozornění:</strong> Tyto operace mohou být nevratné a ovlivnit funkčnost aplikace. 
+            Provádějte je s opatrností.
           </p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Záloha dat</h4>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              Vytvořit zálohu všech dat aplikace
+              Vytvořit zálohu všech dat aplikace (funkce není implementována).
             </p>
-            <Button size="sm" variant="secondary">
+            <Button size="sm" variant="secondary" disabled>
               Vytvořit zálohu
             </Button>
           </div>
           <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Obnovení dat</h4>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              Obnovit data ze zálohy
+              Obnovit data ze zálohy (funkce není implementována).
             </p>
-            <Button size="sm" variant="secondary">
+            <Button size="sm" variant="secondary" disabled>
               Obnovit ze zálohy
             </Button>
           </div>
@@ -561,6 +576,9 @@ export const SettingsView: React.FC = () => {
   );
 
   const renderActiveSection = () => {
+    if (loadingSettings) return <p>Načítání nastavení...</p>;
+    if (settingsError) return <p>Chyba při načítání nastavení. Zkuste to prosím znovu.</p>;
+
     switch (activeSection) {
       case 'general': return renderGeneralSettings();
       case 'sms': return renderSMSSettings();
@@ -583,18 +601,6 @@ export const SettingsView: React.FC = () => {
             Konfigurace systému a globálních parametrů
           </p>
         </div>
-        {hasChanges && (
-          <div className="flex space-x-2">
-            <Button variant="secondary" onClick={handleReset} size="sm">
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Zrušit změny
-            </Button>
-            <Button onClick={handleSave} size="sm">
-              <Save className="w-4 h-4 mr-2" />
-              Uložit nastavení
-            </Button>
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

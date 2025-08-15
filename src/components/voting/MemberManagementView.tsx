@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, UserCheck, Edit, FileDown, Send, Paperclip, FileText } from 'lucide-react';
-import { Vote } from '../../data/mockData';
-import { useApp } from '../../hooks/useApp';
+import { Vote, Member } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
@@ -13,18 +12,37 @@ import 'jspdf-autotable';
 
 interface MemberManagementViewProps {
   vote: Vote;
+  members: Member[];
 }
 
-export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote }) => {
-  const { members } = useApp();
+export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote, members }) => {
   const { showToast } = useToast();
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [showRepresentativeModal, setShowRepresentativeModal] = useState(false);
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [showInvitationModal, setShowInvitationModal] = useState(false);
+
+  const buildingMembers: Member[] = members;
   
-  const buildingMembers = members.filter(m => m.buildingId === vote.buildingId);
-  const votedMembers = Object.keys(vote.memberVotes);
+  const votedMembers = vote.member_votes?.map(mv => mv.member_id) || [];
+  const memberRepresentatives: { [key: string]: string } = {}; // vote.memberRepresentatives || {};
+  
+  const manualVoteAttachments: { [key: string]: { file_name: string }[] } = 
+    vote.member_votes?.reduce((acc, mv) => {
+      if (mv.attachments) {
+        acc[mv.member_id] = mv.attachments;
+      }
+      return acc;
+    }, {} as { [key: string]: { file_name: string }[] }) || {};
+
+  const manualVoteNotes: { [key: string]: string } = 
+    vote.member_votes?.reduce((acc, mv) => {
+      if (mv.note) {
+        acc[mv.member_id] = mv.note;
+      }
+      return acc;
+    }, {} as { [key: string]: string }) || {};
+
 
   const sendInvitation = (memberId: string) => {
     const member = buildingMembers.find(m => m.id === memberId);
@@ -57,8 +75,8 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
       doc.setFontSize(12);
       doc.text(`Hlasování: ${vote.title}`, 20, 40);
       doc.text(`Člen: ${member.name}`, 20, 50);
-      doc.text(`Jednotka: ${member.unit}`, 20, 60);
-      doc.text(`Váha hlasu: ${member.voteWeight}`, 20, 70);
+      doc.text(`Jednotka: ${member.unit || 'N/A'}`, 20, 60);
+      doc.text(`Váha hlasu: ${member.vote_weight}`, 20, 70);
       
       let yPosition = 90;
       
@@ -139,11 +157,11 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
             <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
               {buildingMembers.map((member) => {
                 const hasVoted = votedMembers.includes(member.id);
-                const representative = vote.memberRepresentatives?.[member.id] 
-                  ? buildingMembers.find(m => m.id === vote.memberRepresentatives[member.id])
-                  : buildingMembers.find(m => m.id === member.representativeId);
-                const hasAttachments = vote.manualVoteAttachments?.[member.id]?.length > 0;
-                const hasNote = vote.manualVoteNotes?.[member.id];
+                const representative = memberRepresentatives[member.id]
+                  ? buildingMembers.find(m => m.id === memberRepresentatives[member.id])
+                  : buildingMembers.find(m => m.id === member.representative_id);
+                const hasAttachments = manualVoteAttachments[member.id]?.length > 0;
+                const hasNote = !!manualVoteNotes[member.id];
                 
                 return (
                   <tr key={member.id}>
@@ -151,10 +169,10 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
                       <div className="flex items-center space-x-2">
                         <span>{member.name}</span>
                         {hasAttachments && (
-                          <Paperclip className="w-4 h-4 text-blue-500" title="Má přílohy" />
+                          <span title="Má přílohy"><Paperclip className="w-4 h-4 text-blue-500" /></span>
                         )}
                         {hasNote && (
-                          <FileText className="w-4 h-4 text-green-500" title="Má poznámku" />
+                          <span title="Má poznámku"><FileText className="w-4 h-4 text-green-500" /></span>
                         )}
                       </div>
                     </td>
@@ -168,7 +186,7 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
                       {member.unit}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {member.voteWeight}
+                      {member.vote_weight}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {representative ? representative.name : '-'}
@@ -184,7 +202,7 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
                         </span>
                         {hasVoted && (hasAttachments || hasNote) && (
                           <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {hasAttachments && `${vote.manualVoteAttachments![member.id].length} příloh`}
+                            {hasAttachments && `${manualVoteAttachments[member.id].length} příloh`}
                             {hasAttachments && hasNote && ', '}
                             {hasNote && 'poznámka'}
                           </div>
@@ -262,6 +280,7 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
         </div>
       </Card>
 
+      {/* Modals remain the same, but need to be checked for props */}
       {selectedMemberId && (
         <>
           <ChangeRepresentativeModal
@@ -271,7 +290,8 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
               setSelectedMemberId(null);
             }}
             vote={vote}
-            memberId={selectedMemberId}
+            member={buildingMembers.find(m => m.id === selectedMemberId)!}
+            buildingMembers={buildingMembers}
           />
           
           <ManualVoteEntryModal
@@ -281,7 +301,7 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
               setSelectedMemberId(null);
             }}
             vote={vote}
-            memberId={selectedMemberId}
+            member={buildingMembers.find(m => m.id === selectedMemberId)!}
           />
         </>
       )}
@@ -290,6 +310,7 @@ export const MemberManagementView: React.FC<MemberManagementViewProps> = ({ vote
         isOpen={showInvitationModal}
         onClose={() => setShowInvitationModal(false)}
         vote={vote}
+        buildingId={vote.building_id}
       />
     </div>
   );

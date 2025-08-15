@@ -1,86 +1,94 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useApp } from '../hooks/useApp';
-import { Building2, Sun, Moon, LogOut, User } from 'lucide-react';
-import { useTheme } from '../contexts/ThemeContext';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './common/Button';
+import { LogOut, Sun, Moon } from 'lucide-react';
+import type { Building } from '../graphql/buildings';
 
-export const AppHeader: React.FC = () => {
-  const { theme, toggleTheme } = useTheme();
-  const { user, logout } = useAuth();
-  const { selectedBuilding } = useApp();
-  const navigate = useNavigate();
+interface AppHeaderProps {
+  selectedBuilding: Building;
+  onDeselectBuilding: () => void;
+}
 
-  const handleLogoClick = () => {
-  // Přesměrování na výběr budov (speciální resetovací cesta)
-  navigate('/select-building');
+export const AppHeader: React.FC<AppHeaderProps> = ({ selectedBuilding, onDeselectBuilding }) => {
+  const { signOut } = useAuth();
+  const [isDarkMode, setIsDarkMode] = React.useState(false);
+
+  React.useEffect(() => {
+    const theme = localStorage.getItem('color-theme');
+    if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+      setIsDarkMode(true);
+    } else {
+      document.documentElement.classList.remove('dark');
+      setIsDarkMode(false);
+    }
+  }, []);
+
+  const toggleDarkMode = () => {
+    const newIsDarkMode = !isDarkMode;
+    setIsDarkMode(newIsDarkMode);
+    if (newIsDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('color-theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('color-theme', 'light');
+    }
   };
 
   const handleLogout = () => {
     if (window.confirm('Opravdu se chcete odhlásit?')) {
-      logout();
+      signOut();
     }
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+    <header className="bg-white dark:bg-gray-800 shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center space-x-4">
-            <button 
-              onClick={handleLogoClick}
-              className="flex items-center space-x-2 hover:opacity-80 transition-opacity cursor-pointer"
-            >
-              <Building2 className="w-8 h-8 text-blue-600" />
-              <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                OnlineSprava
-              </h1>
-            </button>
+          <div className="flex items-center">
+            <Link to="/" className="text-2xl font-bold text-gray-900 dark:text-white">
+              OnlineHlasovani
+            </Link>
             {selectedBuilding && (
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                {selectedBuilding.name}
+              <div className="ml-6 hidden sm:flex items-baseline space-x-4">
+                <span className="bg-blue-100 text-blue-800 text-sm font-medium mr-2 px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">
+                  {selectedBuilding.name}
+                </span>
+                <Button variant="secondary" size="sm" onClick={onDeselectBuilding}>
+                  Změnit SVJ
+                </Button>
               </div>
             )}
           </div>
-          
-          <div className="flex items-center space-x-4">
-            {/* User info and logout */}
-            <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
-              <User className="h-4 w-4" />
-              <span className="text-sm">{user?.email}</span>
-            </div>
-            
+          <div className="flex items-center">
             <Button
               variant="ghost"
               size="sm"
-              onClick={handleLogout}
-              title="Odhlásit se"
+              onClick={toggleDarkMode}
+              className="mr-2 text-gray-600 dark:text-gray-300"
+              title={isDarkMode ? 'Přepnout na světlý režim' : 'Přepnout na tmavý režim'}
             >
-              <LogOut className="h-4 w-4" />
-              <span className="sr-only">Odhlásit se</span>
+              {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
-            
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleTheme}
-              title={theme === 'light' ? 'Přepnout na tmavý režim' : 'Přepnout na světlý režim'}
-            >
-              {theme === 'light' ? (
-                <>
-                  <Moon className="w-4 h-4" />
-                  <span className="sr-only">Tmavý režim</span>
-                </>
-              ) : (
-                <>
-                  <Sun className="w-4 h-4" />
-                  <span className="sr-only">Světlý režim</span>
-                </>
-              )}
+            <Button onClick={handleLogout} variant="ghost" size="sm" title="Odhlásit se">
+              <LogOut className="h-5 w-5" />
             </Button>
           </div>
         </div>
+        {selectedBuilding && (
+          <div className="sm:hidden pt-2 pb-4">
+            <div className="flex items-center justify-between">
+              <span className="bg-blue-100 text-blue-800 text-sm font-medium mr-2 px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">
+                {selectedBuilding.name}
+              </span>
+              <Button variant="secondary" size="sm" onClick={onDeselectBuilding}>
+                Změnit SVJ
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );

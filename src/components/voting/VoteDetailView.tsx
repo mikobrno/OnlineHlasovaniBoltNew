@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Edit, Mail, Download, FileText, BarChart3, Eye, Play, Paperclip, FileDown } from 'lucide-react';
 import { useMutation, useQuery } from '@apollo/client';
-import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
@@ -12,71 +11,61 @@ import { ResultsView } from './ResultsView';
 import { MemberManagementView } from './MemberManagementView';
 import { ObserversView } from './ObserversView';
 import { BallotTemplateModal } from './BallotTemplateModal';
-import { 
-  GET_VOTE_ATTACHMENTS, 
-  type VoteAttachment 
-} from '../../graphql/attachments';
-import { 
-  START_VOTE, 
-  GET_VOTE,
-  type Vote 
-} from '../../graphql/votes';
-import { 
-  GET_MEMBERS,
-  type Member 
-} from '../../graphql/members';
+import { GET_VOTE_DETAILS } from '../../graphql/queries';
+import { START_VOTE } from '../../graphql/mutations';
+import { Vote, Member, VoteAttachment } from '../../types';
 
 interface VoteDetailViewProps {
-  vote: Vote;
+  voteId: string;
+  buildingId: string;
   onBack: () => void;
   onEdit: (vote: Vote) => void;
 }
 
 export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
-  vote,
+  voteId,
+  buildingId,
   onBack,
   onEdit
 }) => {
-  const { selectedBuilding } = useApp();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'info' | 'members' | 'observers' | 'progress' | 'results' | 'attachments'>('info');
   const [showAttachmentModal, setShowAttachmentModal] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState<VoteAttachment | null>(null);
   const [showBallotModal, setShowBallotModal] = useState(false);
 
-  // GraphQL dotazy
-  const { data: membersData } = useQuery(GET_MEMBERS, {
-    variables: { buildingId: selectedBuilding?.id }
+  const { data, loading, error } = useQuery(GET_VOTE_DETAILS, {
+    variables: { voteId, buildingId },
   });
 
-  const { data: attachmentsData } = useQuery(GET_VOTE_ATTACHMENTS, {
-    variables: { voteId: vote.id }
-  });
-
-  // GraphQL mutace
   const [startVoteMutation] = useMutation(START_VOTE, {
-    variables: { id: vote.id },
+    variables: { id: voteId },
     refetchQueries: [
-      { query: GET_VOTE, variables: { id: vote.id } }
+      { query: GET_VOTE_DETAILS, variables: { voteId, buildingId } }
     ],
+    onCompleted: () => {
+      showToast('Hlasování bylo úspěšně spuštěno', 'success');
+    },
     onError: (error) => {
       showToast(`Chyba při spuštění hlasování: ${error.message}`, 'error');
     }
   });
+
+  if (loading) return <p>Načítání detailu hlasování...</p>;
+  if (error) return <p>Chyba: {error.message}</p>;
+
+  const vote: Vote = data?.votes_by_pk;
+  const members: Member[] = data?.members || [];
+  const attachments: VoteAttachment[] = vote?.attachments || [];
   
-  const members = membersData?.members || [];
-  const attachments = attachmentsData?.vote_attachments || [];
-  const votedMembers = Object.keys(vote.member_votes).length;
-  const hasAttachments = attachments.length > 0;
+  if (!vote) return <p>Hlasování nebylo nalezeno.</p>;
+
+  const votedMembersCount = vote.member_votes?.length || 0;
+  const hasManualVoteAttachments = attachments.length > 0;
 
   const handleStartVote = async () => {
     if (window.confirm('Opravdu chcete spustit hlasování? Tato akce je nevratná.')) {
-      try {
-        await startVoteMutation();
-        showToast('Hlasování bylo úspěšně spuštěno', 'success');
-      } catch {
-        // Chyby jsou již zpracovány v onError callbacku mutace
-      }
+      await startVoteMutation();
     }
   };
 
@@ -100,15 +89,15 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
   const renderTabContent = () => {
     switch (activeTab) {
       case 'members':
-        return <MemberManagementView vote={vote} />;
+        return <MemberManagementView vote={vote} members={members} />;
       case 'observers':
-        return <ObserversView vote={vote} />;
+        return <ObserversView vote={vote} buildingId={buildingId} />;
       case 'attachments':
         return renderAttachmentsView();
       case 'progress':
-        return vote.status === 'active' ? <VotingProgressView vote={vote} /> : null;
+        return vote.status === 'active' ? <VotingProgressView vote={vote} members={members} /> : null;
       case 'results':
-        return vote.status === 'completed' ? <ResultsView vote={vote} /> : null;
+        return vote.status === 'completed' ? <ResultsView vote={vote} members={members} /> : null;
       default:
         return (
           <div className="space-y-6">
@@ -152,12 +141,12 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
                     Časové údaje
                   </h3>
                   <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                    <div>Vytvořeno: {formatDate(vote.createdAt)}</div>
-                    {vote.startDate && (
-                      <div>Začátek: {formatDate(vote.startDate)}</div>
+                    <div>Vytvořeno: {formatDate(vote.created_at)}</div>
+                    {vote.start_date && (
+                      <div>Začátek: {formatDate(vote.start_date)}</div>
                     )}
-                    {vote.endDate && (
-                      <div>Konec: {formatDate(vote.endDate)}</div>
+                    {vote.end_date && (
+                      <div>Konec: {formatDate(vote.end_date)}</div>
                     )}
                   </div>
                 </div>
@@ -167,8 +156,8 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
                     Účast
                   </h3>
                   <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                    <div>Hlasovalo: {votedMembers} z {buildingMembers.length} členů</div>
-                    <div>Účast: {buildingMembers.length > 0 ? Math.round((votedMembers / buildingMembers.length) * 100) : 0}%</div>
+                    <div>Hlasovalo: {votedMembersCount} z {members.length} členů</div>
+                    <div>Účast: {members.length > 0 ? Math.round((votedMembersCount / members.length) * 100) : 0}%</div>
                     {hasManualVoteAttachments && (
                       <div className="flex items-center space-x-1 text-blue-600 dark:text-blue-400">
                         <Paperclip className="w-3 h-3" />
@@ -193,11 +182,11 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
                           {index + 1}. {question.text}
                         </h4>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          Kvórum: {question.quorumType === 'simple' && 'Prostá většina (1/2)'}
-                          {question.quorumType === 'qualified' && 'Kvalifikovaná většina (2/3)'}
-                          {question.quorumType === 'unanimous' && 'Jednomyslné'}
-                          {question.quorumType === 'custom' && question.customQuorum && 
-                            `Vlastní (${question.customQuorum.numerator}/${question.customQuorum.denominator})`
+                          Kvórum: {question.quorum_type === 'simple' && 'Prostá většina (1/2)'}
+                          {question.quorum_type === 'qualified' && 'Kvalifikovaná většina (2/3)'}
+                          {question.quorum_type === 'unanimous' && 'Jednomyslné'}
+                          {question.quorum_type === 'custom' && question.custom_quorum && 
+                            `Vlastní (${question.custom_quorum.numerator}/${question.custom_quorum.denominator})`
                           }
                         </p>
                       </div>
@@ -214,16 +203,17 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
   const renderAttachmentsView = () => {
     // Seskupit přílohy podle členů
     const attachmentsByMember = attachments.reduce((acc, attachment) => {
-      const memberId = attachment.member_id;
+      const memberId = attachment.member?.id;
+      if (!memberId || !attachment.member) return acc;
       if (!acc[memberId]) {
         acc[memberId] = {
-          member: attachment.member!,
+          member: attachment.member,
           attachments: []
         };
       }
       acc[memberId].attachments.push(attachment);
       return acc;
-    }, {} as Record<string, { member: Member; attachments: VoteAttachment[] }>);
+    }, {} as Record<string, { member: NonNullable<VoteAttachment['member']>; attachments: VoteAttachment[] }>);
 
     const membersWithAttachments = Object.values(attachmentsByMember);
 
@@ -313,7 +303,7 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
               <span>{tab.label}</span>
               {tab.id === 'attachments' && hasManualVoteAttachments && (
                 <span className="bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200 text-xs px-2 py-0.5 rounded-full">
-                  {Object.keys(vote.manualVoteAttachments!).length}
+                  {attachments.length}
                 </span>
               )}
             </button>

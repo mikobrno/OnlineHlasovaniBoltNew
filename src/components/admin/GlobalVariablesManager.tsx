@@ -1,35 +1,40 @@
 import React, { useState } from 'react';
 import { Save, RotateCcw, Eye, EyeOff, Plus, Trash2, Edit } from 'lucide-react';
-import { useApp } from '../../hooks/useApp';
+import { useQuery, useMutation } from '@apollo/client';
+import {
+  GET_GLOBAL_VARIABLES,
+  ADD_GLOBAL_VARIABLE,
+  UPDATE_GLOBAL_VARIABLE,
+  DELETE_GLOBAL_VARIABLE,
+} from '../../graphql/globalVariables';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Modal } from '../common/Modal';
-import { GlobalVariable } from '../../data/mockData';
+import { GlobalVariable } from '../../types';
 
 export const GlobalVariablesManager: React.FC = () => {
-  const { globalVariables, addGlobalVariable, updateGlobalVariable, deleteGlobalVariable } = useApp();
-  // Zaručíme volání – pokud nejsou definované (placeholdery), vytvoříme no-op
-  const safeAdd = addGlobalVariable ?? (async () => {});
-  const safeUpdate = updateGlobalVariable ?? (async () => {});
-  const safeDelete = deleteGlobalVariable ?? (async () => {});
   const { showToast } = useToast();
   const [editedVariables, setEditedVariables] = useState<Record<string, string>>({});
   const [showPreview, setShowPreview] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingVariable, setEditingVariable] = useState<GlobalVariable | null>(null);
-  const [newVariable, setNewVariable] = useState({
-    name: '',
-    description: '',
-    value: ''
+  const [newVariable, setNewVariable] = useState({ name: '', description: '', value: '' });
+
+  const { data, loading, error } = useQuery(GET_GLOBAL_VARIABLES);
+  const [addVariableMutation] = useMutation(ADD_GLOBAL_VARIABLE, {
+    refetchQueries: [GET_GLOBAL_VARIABLES],
+  });
+  const [updateVariableMutation] = useMutation(UPDATE_GLOBAL_VARIABLE);
+  const [deleteVariableMutation] = useMutation(DELETE_GLOBAL_VARIABLE, {
+    refetchQueries: [GET_GLOBAL_VARIABLES],
   });
 
+  const globalVariables: GlobalVariable[] = data?.global_variables || [];
+
   const handleVariableChange = (name: string, value: string) => {
-    setEditedVariables(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setEditedVariables(prev => ({ ...prev, [name]: value }));
   };
 
   const getVariableValue = (variable: GlobalVariable) => {
@@ -45,19 +50,27 @@ export const GlobalVariablesManager: React.FC = () => {
     });
   };
 
-  const handleSave = () => {
-    Object.entries(editedVariables).forEach(([name, value]) => {
-      const variable = globalVariables.find(v => v.name === name);
-      if (variable && value !== variable.value) {
-  safeUpdate({
-          ...variable,
-          value
-        });
-      }
-    });
-    
-    setEditedVariables({});
-    showToast('Globální proměnné byly uloženy', 'success');
+  const handleSave = async () => {
+    const updates = Object.entries(editedVariables)
+      .map(([name, value]) => {
+        const variable = globalVariables.find(v => v.name === name);
+        if (variable && value !== variable.value) {
+          return updateVariableMutation({
+            variables: { id: variable.id, variable: { value } },
+          });
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    try {
+      await Promise.all(updates);
+      setEditedVariables({});
+      showToast('Globální proměnné byly uloženy', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Chyba při ukládání proměnných', 'error');
+    }
   };
 
   const handleReset = () => {
@@ -67,81 +80,82 @@ export const GlobalVariablesManager: React.FC = () => {
 
   const resolveNestedVariables = (text: string): string => {
     let result = text;
-    
-    // Simple resolution - replace variables with their current values
     globalVariables.forEach(variable => {
       const currentValue = getVariableValue(variable);
       const regex = new RegExp(`{{${variable.name}}}`, 'g');
       result = result.replace(regex, currentValue);
     });
-    
     return result;
   };
 
-  const handleAddVariable = () => {
+  const handleAddVariable = async () => {
     if (!newVariable.name.trim() || !newVariable.description.trim()) {
       showToast('Vyplňte název a popis proměnné', 'error');
       return;
     }
-
     const variableName = newVariable.name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    
     if (globalVariables.some(v => v.name === variableName)) {
       showToast('Proměnná s tímto názvem již existuje', 'error');
       return;
     }
-
-    const variable: GlobalVariable = {
-      name: variableName,
-      description: newVariable.description.trim(),
-      value: newVariable.value.trim(),
-      isEditable: true
-    };
-
-  safeAdd(variable);
-    setNewVariable({ name: '', description: '', value: '' });
-    setShowAddModal(false);
-    showToast('Globální proměnná byla přidána', 'success');
+    try {
+      await addVariableMutation({
+        variables: {
+          variable: {
+            name: variableName,
+            description: newVariable.description.trim(),
+            value: newVariable.value.trim(),
+          },
+        },
+      });
+      closeModal();
+      showToast('Globální proměnná byla přidána', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Chyba při přidávání proměnné', 'error');
+    }
   };
 
   const handleEditVariable = (variable: GlobalVariable) => {
     setEditingVariable(variable);
     setNewVariable({
       name: variable.name,
-      description: variable.description,
-      value: variable.value
+      description: variable.description || '',
+      value: variable.value,
     });
     setShowAddModal(true);
   };
 
-  const handleUpdateVariable = () => {
-    if (!editingVariable || !newVariable.description.trim()) {
-      showToast('Vyplňte popis proměnné', 'error');
-      return;
+  const handleUpdateVariable = async () => {
+    if (!editingVariable) return;
+    try {
+      await updateVariableMutation({
+        variables: {
+          id: editingVariable.id,
+          variable: {
+            description: newVariable.description.trim(),
+            value: newVariable.value.trim(),
+          },
+        },
+      });
+      closeModal();
+      showToast('Globální proměnná byla aktualizována', 'success');
+    } catch (e) {
+      console.error(e);
+      showToast('Chyba při aktualizaci proměnné', 'error');
     }
-
-    const updatedVariable: GlobalVariable = {
-      ...editingVariable,
-      description: newVariable.description.trim(),
-      value: newVariable.value.trim()
-    };
-
-  safeUpdate(updatedVariable);
-    setEditingVariable(null);
-    setNewVariable({ name: '', description: '', value: '' });
-    setShowAddModal(false);
-    showToast('Globální proměnná byla aktualizována', 'success');
   };
 
-  const handleDeleteVariable = (variable: GlobalVariable) => {
-    if (!variable.isEditable) {
-      showToast('Tuto systémovou proměnnou nelze smazat', 'error');
-      return;
-    }
-
-    if (window.confirm(`Opravdu chcete smazat proměnnou "${variable.description}"?`)) {
-  safeDelete(variable.name);
-      showToast('Globální proměnná byla smazána', 'success');
+  const handleDeleteVariable = async (variable: GlobalVariable) => {
+    // Systémové proměnné (např. bez popisu) by neměly být mazatelné z UI
+    if (window.confirm(`Opravdu chcete smazat proměnnou "${variable.description || variable.name}"?`)) {
+      try {
+        await deleteVariableMutation({ variables: { id: variable.id } });
+        showToast('Globální proměnná byla smazána', 'success');
+      } catch (e) {
+        console.error(e);
+        showToast('Chyba při mazání proměnné', 'error');
+      }
     }
   };
 
@@ -150,6 +164,9 @@ export const GlobalVariablesManager: React.FC = () => {
     setEditingVariable(null);
     setNewVariable({ name: '', description: '', value: '' });
   };
+
+  if (loading) return <p>Načítání globálních proměnných...</p>;
+  if (error) return <p>Chyba: {error.message}</p>;
 
   return (
     <div>
@@ -208,12 +225,9 @@ export const GlobalVariablesManager: React.FC = () => {
             </h3>
             <div className="space-y-4">
               {globalVariables.map((variable) => (
-                <div key={variable.name} className="relative group">
+                <div key={variable.id} className="relative group">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {variable.description}
-                    {!variable.isEditable && (
-                      <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(systémová)</span>
-                    )}
+                    {variable.description || variable.name}
                   </label>
                   <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-mono">
                     {`{{${variable.name}}}`}
@@ -224,41 +238,34 @@ export const GlobalVariablesManager: React.FC = () => {
                         value={getVariableValue(variable)}
                         onChange={(e) => handleVariableChange(variable.name, e.target.value)}
                         rows={3}
-                        disabled={!variable.isEditable}
-                        className={`w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                          !variable.isEditable ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
+                        className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     ) : (
                       <Input
                         value={getVariableValue(variable)}
                         onChange={(e) => handleVariableChange(variable.name, e.target.value)}
-                        disabled={!variable.isEditable}
-                        className={!variable.isEditable ? 'opacity-50 cursor-not-allowed' : ''}
                       />
                     )}
-                    {variable.isEditable && (
-                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
-                        <button
-                          title="Upravit"
-                          aria-label="Upravit proměnnou"
-                          type="button"
-                          onClick={() => handleEditVariable(variable)}
-                          className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded"
-                        >
-                          <Edit className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                        </button>
-                        <button
-                          title="Smazat"
-                          aria-label="Smazat proměnnou"
-                          type="button"
-                          onClick={() => handleDeleteVariable(variable)}
-                          className="p-1 hover:bg-red-100 dark:hover:bg-red-900/50 rounded"
-                        >
-                          <Trash2 className="w-3 h-3 text-red-600 dark:text-red-400" />
-                        </button>
-                      </div>
-                    )}
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
+                      <button
+                        title="Upravit"
+                        aria-label="Upravit proměnnou"
+                        type="button"
+                        onClick={() => handleEditVariable(variable)}
+                        className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded"
+                      >
+                        <Edit className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                      </button>
+                      <button
+                        title="Smazat"
+                        aria-label="Smazat proměnnou"
+                        type="button"
+                        onClick={() => handleDeleteVariable(variable)}
+                        className="p-1 hover:bg-red-100 dark:hover:bg-red-900/50 rounded"
+                      >
+                        <Trash2 className="w-3 h-3 text-red-600 dark:text-red-400" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -273,10 +280,10 @@ export const GlobalVariablesManager: React.FC = () => {
                 Náhled s rozbalenými proměnnými
               </h3>
               <div className="space-y-4">
-                {globalVariables.filter(v => v.isEditable).map((variable) => (
-                  <div key={variable.name} className="border-b border-gray-200 dark:border-gray-700 pb-3 last:border-b-0">
+                {globalVariables.map((variable) => (
+                  <div key={variable.id} className="border-b border-gray-200 dark:border-gray-700 pb-3 last:border-b-0">
                     <div className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
-                      {variable.description}
+                      {variable.description || variable.name}
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-mono">
                       {`{{${variable.name}}}`}
@@ -325,7 +332,8 @@ export const GlobalVariablesManager: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Hodnota proměnné
             </label>
-                      <textarea
+            <textarea
+              id="variable-value"
               title="Hodnota proměnné"
               value={newVariable.value}
               onChange={(e) => setNewVariable({ ...newVariable, value: e.target.value })}
@@ -373,8 +381,8 @@ export const GlobalVariablesManager: React.FC = () => {
                 Systémové vs. vlastní proměnné
               </h4>
               <p className="text-gray-600 dark:text-gray-400 mb-3">
-                <strong>Systémové proměnné</strong> (označené modře) jsou automaticky generované 
-                a nelze je smazat. Například <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">datum_dnes</code>.
+                <strong>Systémové proměnné</strong> (např. ty bez popisu) jsou často generované 
+                a neměly by se mazat. Například <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">datum_dnes</code>.
               </p>
               <p className="text-gray-600 dark:text-gray-400">
                 <strong>Vlastní proměnné</strong> můžete přidávat, upravovat a mazat podle potřeby. 

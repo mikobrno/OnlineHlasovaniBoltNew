@@ -4,58 +4,12 @@ import { useToast } from '../../contexts/ToastContext';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Card } from '../common/Card';
-import { gql } from '@apollo/client';
 import { useQuery, useMutation } from '@apollo/client';
-
-const CREATE_BUILDING = gql`
-  mutation CreateBuilding($name: String!, $address: String!, $total_units: Int!, $variables: jsonb) {
-    insert_buildings_one(object: {
-      name: $name,
-      address: $address,
-      total_units: $total_units,
-      variables: $variables
-    }) {
-      id
-      name
-      address
-      total_units
-      variables
-    }
-  }
-`;
-
-const UPDATE_BUILDING = gql`
-  mutation UpdateBuilding($id: uuid!, $name: String!, $address: String!, $total_units: Int!, $variables: jsonb) {
-    update_buildings_by_pk(
-      pk_columns: { id: $id },
-      _set: {
-        name: $name,
-        address: $address,
-        total_units: $total_units,
-        variables: $variables
-      }
-    ) {
-      id
-      name
-      address
-      total_units
-      variables
-    }
-  }
-`;
-
-const GET_BUILDING_VARIABLES = gql`
-  query GetBuildingVariables {
-    building_variables {
-      name
-      description
-      type
-      required
-      placeholder
-      options
-    }
-  }
-`;
+import {
+  CREATE_BUILDING,
+  UPDATE_BUILDING,
+} from '../../graphql/buildings';
+import { GET_BUILDING_VARIABLES } from '../../graphql/buildingVariables';
 
 interface Building {
   id: string;

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useApp } from '../../hooks/useApp';
 import { useToast } from '../../contexts/ToastContext';
 import { Modal } from '../common/Modal';
 import { Button } from '../common/Button';
@@ -16,36 +15,34 @@ interface MemberFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   member?: Member | null;
+  buildingId: string;
 }
 
 export const MemberFormModal: React.FC<MemberFormModalProps> = ({
   isOpen,
   onClose,
-  member
+  member,
+  buildingId
 }) => {
-  const { selectedBuilding } = useApp();
   const { showToast } = useToast();
 
-  // GraphQL mutace
   const [addMemberMutation] = useMutation(ADD_MEMBER, {
-    refetchQueries: [
-      {
-        query: GET_MEMBERS,
-        variables: { buildingId: selectedBuilding?.id },
-      },
-    ],
+    onCompleted: () => {
+        showToast('Člen byl úspěšně přidán', 'success');
+        onClose();
+    },
+    refetchQueries: [{ query: GET_MEMBERS, variables: { buildingId } }],
     onError: (error) => {
       showToast(`Chyba při přidání člena: ${error.message}`, 'error');
     }
   });
 
   const [updateMemberMutation] = useMutation(UPDATE_MEMBER, {
-    refetchQueries: [
-      {
-        query: GET_MEMBERS,
-        variables: { buildingId: selectedBuilding?.id },
-      },
-    ],
+    onCompleted: () => {
+        showToast('Člen byl úspěšně aktualizován', 'success');
+        onClose();
+    },
+    refetchQueries: [{ query: GET_MEMBERS, variables: { buildingId } }],
     onError: (error) => {
       showToast(`Chyba při aktualizaci člena: ${error.message}`, 'error');
     }
@@ -61,8 +58,8 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
   });
 
   const { data: membersData } = useQuery(GET_MEMBERS, {
-    variables: { buildingId: selectedBuilding?.id },
-    skip: !selectedBuilding?.id,
+    variables: { buildingId },
+    skip: !buildingId,
   });
 
   const buildingMembers = (membersData?.members || []).filter((m: Member) => 
@@ -74,7 +71,7 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
       setFormData({
         name: member.name,
         email: member.email,
-        phone: member.phone,
+        phone: member.phone || '',
         unit: member.unit,
         vote_weight: member.vote_weight,
         representative_id: member.representative_id || ''
@@ -89,26 +86,29 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
         representative_id: ''
       });
     }
-  }, [member]);
+  }, [member, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedBuilding) return;
+    if (!buildingId) {
+        showToast('Není vybrána žádná budova.', 'error');
+        return;
+    }
     
     if (!formData.name.trim() || !formData.email.trim() || !formData.unit.trim()) {
-      showToast('Vyplňte všechna povinná pole', 'error');
+      showToast('Vyplňte všechna povinná pole (Jméno, E-mail, Jednotka)', 'error');
       return;
     }
 
-    const memberData = {
+    const memberInput = {
       name: formData.name.trim(),
       email: formData.email.trim(),
-      phone: formData.phone.trim(),
+      phone: formData.phone.trim() || null,
       unit: formData.unit.trim(),
       vote_weight: formData.vote_weight,
       representative_id: formData.representative_id || null,
-      building_id: selectedBuilding.id
+      building_id: buildingId
     };
 
     try {
@@ -116,19 +116,19 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
         await updateMemberMutation({
           variables: {
             id: member.id,
-            ...memberData,
+            changes: memberInput,
           },
         });
-        showToast('Člen byl aktualizován', 'success');
       } else {
         await addMemberMutation({
-          variables: memberData,
+          variables: {
+            member: memberInput,
+          },
         });
-        showToast('Člen byl přidán', 'success');
       }
-      onClose();
-    } catch {
-      // Chyby už jsou zpracovány v konfiguraci mutací
+    } catch (err) {
+      // Chyby jsou již zpracovány v `onError` handlerech mutací
+      console.error(err);
     }
   };
 
@@ -175,8 +175,8 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
         <Input
           label="Váha hlasu"
           type="number"
-          step="0.1"
-          min="0.1"
+          step="0.01"
+          min="0"
           value={formData.vote_weight}
           onChange={(e) => setFormData({ ...formData, vote_weight: parseFloat(e.target.value) || 1 })}
           helperText="Váha hlasu podle velikosti podílu"
@@ -189,12 +189,12 @@ export const MemberFormModal: React.FC<MemberFormModalProps> = ({
           <select
             id="representative"
             aria-label="Vyberte zástupce"
-            value={formData.representative_id}
+            value={formData.representative_id || ''}
             onChange={(e) => setFormData({ ...formData, representative_id: e.target.value })}
             className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="">Žádný zástupce</option>
-            {buildingMembers.map((rep) => (
+            {buildingMembers.map((rep: Member) => (
               <option key={rep.id} value={rep.id}>
                 {rep.name} (jednotka {rep.unit})
               </option>

@@ -1,23 +1,22 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { useApp } from '../contexts/AppContext';
 import { AppHeader } from './AppHeader';
-import { BuildingSelector } from './BuildingSelector';
 import { MainApp } from './MainApp';
 import { VotingPage } from './voting/VotingPage';
+import type { Building } from '../graphql/buildings';
 
-export const AppContent: React.FC = () => {
-  const { selectedBuilding } = useApp();
+interface AppContentProps {
+  selectedBuilding: Building;
+  onDeselectBuilding: () => void;
+}
 
+export const AppContent: React.FC<AppContentProps> = ({ selectedBuilding, onDeselectBuilding }) => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <AppHeader />
+      <AppHeader selectedBuilding={selectedBuilding} onDeselectBuilding={onDeselectBuilding} />
       <Routes>
         <Route path="/vote/:token" element={<VotingPage />} />
-  <Route path="/select-building" element={<BuildingSelector />} />
-        <Route path="/*" element={
-          !selectedBuilding ? <BuildingSelector /> : <MainApp />
-        } />
+        <Route path="/*" element={<MainApp selectedBuilding={selectedBuilding} />} />
       </Routes>
     </div>
   );
