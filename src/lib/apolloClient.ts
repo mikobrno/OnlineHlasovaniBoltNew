@@ -1,15 +1,17 @@
-import { NhostApolloProvider } from '@nhost/react-apollo';
+import { NhostClient } from '@nhost/nhost-js';
 import { ApolloClient, InMemoryCache } from '@apollo/client';
-import nhost from './nhostClient';
 
-const NHOST_ADMIN_SECRET = import.meta.env.VITE_NHOST_ADMIN_SECRET || '';
-
-const apolloClient = new ApolloClient({
-  uri: `https://zrgbhrxnkjggssfhjqwp.eu-central-1.nhost.run/v1/graphql`,
-  cache: new InMemoryCache(),
-  headers: {
-    'x-hasura-admin-secret': NHOST_ADMIN_SECRET
-  }
+const nhost = new NhostClient({
+  subdomain: import.meta.env.VITE_NHOST_SUBDOMAIN,
+  region: import.meta.env.VITE_NHOST_REGION,
 });
 
-export { apolloClient, NhostApolloProvider };
+const apolloClient = new ApolloClient({
+  uri: nhost.graphql.getUrl(),
+  cache: new InMemoryCache(),
+  headers: {
+    'x-hasura-admin-secret': import.meta.env.VITE_NHOST_ADMIN_SECRET as string,
+  },
+});
+
+export { nhost, apolloClient };

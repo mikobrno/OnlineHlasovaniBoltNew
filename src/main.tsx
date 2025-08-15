@@ -3,15 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { NhostProvider } from '@nhost/react';
 import { ApolloProvider } from '@apollo/client';
-import nhost from './lib/nhostClient';
 import App from './App.tsx';
 import './index.css';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { AuthProvider } from './contexts/AuthContext';
-
-// Získáme Apollo klienta z Nhost instance
-const apolloClient = nhost.graphql.getClient();
+import { nhost, apolloClient } from './lib/apolloClient'; // Import nového klienta
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
