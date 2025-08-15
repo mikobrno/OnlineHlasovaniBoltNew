@@ -1,6 +1,6 @@
 import { gql } from '@apollo/client';
 import { EMAIL_TEMPLATE_FIELDS } from './templates';
-import { GLOBAL_VARIABLE_FIELDS } from './globalVariables';
+import { GLOBAL_VARIABLE_FIELDS } from './globals';
 
 export const GET_EMAIL_GENERATOR_DATA = gql`
   query GetEmailGeneratorData($buildingId: uuid!) {

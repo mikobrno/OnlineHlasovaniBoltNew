@@ -12,7 +12,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Modal } from '../common/Modal';
-import { GlobalVariable } from '../../types';
+import { GlobalVariable } from '../../graphql/globalVariables';
 
 export const GlobalVariablesManager: React.FC = () => {
   const { showToast } = useToast();
@@ -56,7 +56,7 @@ export const GlobalVariablesManager: React.FC = () => {
         const variable = globalVariables.find(v => v.name === name);
         if (variable && value !== variable.value) {
           return updateVariableMutation({
-            variables: { id: variable.id, variable: { value } },
+            variables: { name: variable.name, variable: { value } },
           });
         }
         return null;
@@ -131,11 +131,11 @@ export const GlobalVariablesManager: React.FC = () => {
     try {
       await updateVariableMutation({
         variables: {
-          id: editingVariable.id,
-          variable: {
-            description: newVariable.description.trim(),
-            value: newVariable.value.trim(),
-          },
+            name: editingVariable.name,
+            variable: {
+              description: newVariable.description.trim(),
+              value: newVariable.value.trim(),
+            },
         },
       });
       closeModal();
@@ -150,7 +150,7 @@ export const GlobalVariablesManager: React.FC = () => {
     // Systémové proměnné (např. bez popisu) by neměly být mazatelné z UI
     if (window.confirm(`Opravdu chcete smazat proměnnou "${variable.description || variable.name}"?`)) {
       try {
-        await deleteVariableMutation({ variables: { id: variable.id } });
+  await deleteVariableMutation({ variables: { name: variable.name } });
         showToast('Globální proměnná byla smazána', 'success');
       } catch (e) {
         console.error(e);
@@ -225,7 +225,7 @@ export const GlobalVariablesManager: React.FC = () => {
             </h3>
             <div className="space-y-4">
               {globalVariables.map((variable) => (
-                <div key={variable.id} className="relative group">
+                <div key={variable.name} className="relative group">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     {variable.description || variable.name}
                   </label>
@@ -281,7 +281,7 @@ export const GlobalVariablesManager: React.FC = () => {
               </h3>
               <div className="space-y-4">
                 {globalVariables.map((variable) => (
-                  <div key={variable.id} className="border-b border-gray-200 dark:border-gray-700 pb-3 last:border-b-0">
+                  <div key={variable.name} className="border-b border-gray-200 dark:border-gray-700 pb-3 last:border-b-0">
                     <div className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
                       {variable.description || variable.name}
                     </div>

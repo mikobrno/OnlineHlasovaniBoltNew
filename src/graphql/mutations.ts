@@ -45,19 +45,25 @@ export const START_VOTE = gql`
 `;
 
 export const ADD_OBSERVER_TO_VOTE = gql`
-  mutation AddObserverToVote($vote_id: uuid!, $observer_id: uuid!) {
-    insert_vote_observers_one(object: {vote_id: $vote_id, observer_id: $observer_id}) {
-      vote_id
-      observer_id
+  mutation AddObserverToVote($vote_id: uuid!, $observer_email: String!) {
+    update_votes_by_pk(
+      pk_columns: {id: $vote_id}, 
+      _append: {observers: [$observer_email]}
+    ) {
+      id
+      observers
     }
   }
 `;
 
 export const REMOVE_OBSERVER_FROM_VOTE = gql`
-  mutation RemoveObserverFromVote($vote_id: uuid!, $observer_id: uuid!) {
-    delete_vote_observers_by_pk(vote_id: $vote_id, observer_id: $observer_id) {
-      vote_id
-      observer_id
+  mutation RemoveObserverFromVote($vote_id: uuid!, $observer_email: String!) {
+    update_votes_by_pk(
+      pk_columns: {id: $vote_id},
+      _delete_elem: {observers: $observer_email}
+    ) {
+      id
+      observers
     }
   }
 `;

@@ -30,9 +30,11 @@ interface VoteCardProps {
   totalMembers: number;
 }
 
-export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick }) => {
+export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick, totalMembers }) => {
   const { showToast } = useToast();
-  const votedMembers = Object.keys(vote.member_votes).length;
+  const votedMembers = vote && vote.member_votes
+    ? Object.keys(vote.member_votes || {}).length
+    : 0;
 
   // Mutace pro spuštění hlasování
   const [startVoteMutation] = useMutation(START_VOTE_MUTATION, {
@@ -94,10 +96,10 @@ export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick }) => {
 
           <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
             <CheckCircle className="w-4 h-4 mr-2" />
-            <span>{vote.questions.length} otázek</span>
+            <span>{(vote.questions ? vote.questions.length : 0)} otázek</span>
           </div>
 
-          {vote.observers?.length > 0 && (
+          {Array.isArray(vote.observers) && vote.observers.length > 0 && (
             <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
               <Eye className="w-4 h-4 mr-2" />
               <span>{vote.observers.length} pozorovatelů</span>
@@ -107,7 +109,9 @@ export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick }) => {
 
         {vote.status === 'active' && (
           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-            <div 
+            {/* inline width style kvůli dynamické šířce progress baru */}
+            {/* eslint-disable-next-line react/forbid-dom-props */}
+            <div
               className="bg-blue-600 h-2 rounded-full transition-all"
               style={{ width: progressWidth }}
             />

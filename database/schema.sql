@@ -132,6 +132,14 @@ CREATE TABLE IF NOT EXISTS building_variable_definitions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Jednoduchá tabulka pro aplikační nastavení (klíč->JSON hodnota)
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ========================================
 -- POKROČILÉ TABULKY PRO DELEGOVÁNÍ A NOTIFIKACE
 -- ========================================
@@ -494,6 +502,8 @@ DROP TRIGGER IF EXISTS update_email_templates_updated_at ON email_templates;
 CREATE TRIGGER update_email_templates_updated_at BEFORE UPDATE ON email_templates FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 DROP TRIGGER IF EXISTS update_global_variables_updated_at ON global_variables;
 CREATE TRIGGER update_global_variables_updated_at BEFORE UPDATE ON global_variables FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DROP TRIGGER IF EXISTS update_settings_updated_at ON settings;
+CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Triggery pro audit log (na vybraných tabulkách) – idempotentně
 DROP TRIGGER IF EXISTS audit_buildings ON buildings;
@@ -519,6 +529,7 @@ ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE global_variables ENABLE ROW LEVEL SECURITY;
 ALTER TABLE building_variable_definitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE observers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE voting_tokens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE member_votes ENABLE ROW LEVEL SECURITY;
@@ -602,6 +613,12 @@ DROP POLICY IF EXISTS "Allow all for admin proxy_votes" ON proxy_votes;
 CREATE POLICY "Allow all for admin proxy_votes" ON proxy_votes FOR ALL USING (true);
 DROP POLICY IF EXISTS "Allow all for admin attachments" ON attachments;
 CREATE POLICY "Allow all for admin attachments" ON attachments FOR ALL USING (true);
+
+-- Policies pro settings
+DROP POLICY IF EXISTS "Allow read settings" ON settings;
+CREATE POLICY "Allow read settings" ON settings FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow all for admin settings" ON settings;
+CREATE POLICY "Allow all for admin settings" ON settings FOR ALL USING (true);
 
 -- Specifické policies pro hlasování a delegování
 DROP POLICY IF EXISTS "Allow delegation read for participants" ON vote_delegations;

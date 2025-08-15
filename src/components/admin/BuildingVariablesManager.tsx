@@ -35,10 +35,8 @@ export const BuildingVariablesManager: React.FC = () => {
   const [newVariable, setNewVariable] = useState({
     name: '',
     description: '',
-    type: 'text' as 'text' | 'textarea' | 'select',
-    required: false,
-    placeholder: '',
-    options: ['']
+    value: '',
+    building_id: ''
   });
 
   const handleAddVariable = async () => {
@@ -47,22 +45,23 @@ export const BuildingVariablesManager: React.FC = () => {
       return;
     }
 
+    if (!newVariable.building_id) {
+      showToast('Není vybrána budova', 'error');
+      return;
+    }
+
     const variableName = newVariable.name.toLowerCase().replace(/[^a-z0-9_]/g, '_');
     
-    if (buildingVariables.some((v) => v.name === variableName)) {
-      showToast('Proměnná s tímto názvem již existuje', 'error');
+    if (buildingVariables.some((v) => v.name === variableName && v.building_id === newVariable.building_id)) {
+      showToast('Proměnná s tímto názvem již pro tuto budovu existuje', 'error');
       return;
     }
 
     const variableToInsert = {
       name: variableName,
       description: newVariable.description.trim(),
-      type: newVariable.type,
-      required: newVariable.required,
-      placeholder: newVariable.placeholder.trim() || undefined,
-      options: newVariable.type === 'select' 
-        ? newVariable.options.filter(opt => opt.trim()).map(opt => opt.trim())
-        : undefined
+      value: newVariable.value || '',
+      building_id: newVariable.building_id
     };
 
     try {
@@ -81,10 +80,8 @@ export const BuildingVariablesManager: React.FC = () => {
     setNewVariable({
       name: variable.name,
       description: variable.description,
-      type: variable.type,
-      required: variable.required || false,
-      placeholder: variable.placeholder || '',
-      options: variable.options || ['']
+      value: variable.value || '',
+      building_id: variable.building_id
     });
     setShowAddModal(true);
   };
@@ -97,16 +94,18 @@ export const BuildingVariablesManager: React.FC = () => {
 
     const updatedVariableData = {
       description: newVariable.description.trim(),
-      type: newVariable.type,
-      required: newVariable.required,
-      placeholder: newVariable.placeholder.trim() || undefined,
-      options: newVariable.type === 'select' 
-        ? newVariable.options.filter(opt => opt.trim()).map(opt => opt.trim())
-        : undefined
+      value: newVariable.value || '',
+      building_id: newVariable.building_id
     };
 
     try {
-      await updateVariableMutation({ variables: { id: editingVariable.id, variable: updatedVariableData } });
+      await updateVariableMutation({ 
+        variables: { 
+          name: editingVariable.name, 
+          building_id: editingVariable.building_id, 
+          variable: updatedVariableData 
+        } 
+      });
       resetForm();
       setEditingVariable(null);
       setShowAddModal(false);
@@ -118,8 +117,13 @@ export const BuildingVariablesManager: React.FC = () => {
   };
 
   const handleDeleteVariable = (variable: BuildingVariable) => {
-    if (window.confirm(`Opravdu chcete smazat proměnnou "${variable.description}"? Tato akce ovlivní všechny budovy.`)) {
-      deleteVariableMutation({ variables: { id: variable.id } })
+    if (window.confirm(`Opravdu chcete smazat proměnnou "${variable.description}"? Tato akce nelze vrátit.`)) {
+      deleteVariableMutation({ 
+        variables: { 
+          name: variable.name, 
+          building_id: variable.building_id 
+        } 
+      })
         .then(() => showToast('Proměnná budovy byla smazána', 'success'))
         .catch((e) => {
             console.error(e);
@@ -132,10 +136,8 @@ export const BuildingVariablesManager: React.FC = () => {
     setNewVariable({
       name: '',
       description: '',
-      type: 'text',
-      required: false,
-      placeholder: '',
-      options: ['']
+      value: '',
+      building_id: ''
     });
   };
 
@@ -143,32 +145,6 @@ export const BuildingVariablesManager: React.FC = () => {
     setShowAddModal(false);
     setEditingVariable(null);
     resetForm();
-  };
-
-  const addOption = () => {
-    setNewVariable({
-      ...newVariable,
-      options: [...newVariable.options, '']
-    });
-  };
-
-  const updateOption = (index: number, value: string) => {
-    const newOptions = [...newVariable.options];
-    newOptions[index] = value;
-    setNewVariable({
-      ...newVariable,
-      options: newOptions
-    });
-  };
-
-  const removeOption = (index: number) => {
-    if (newVariable.options.length > 1) {
-      const newOptions = newVariable.options.filter((_, i) => i !== index);
-      setNewVariable({
-        ...newVariable,
-        options: newOptions
-      });
-    }
   };
 
   if (loading) return <p>Načítání proměnných...</p>;
@@ -182,7 +158,7 @@ export const BuildingVariablesManager: React.FC = () => {
             Proměnné pro budovy
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Definujte, jaké proměnné budou dostupné pro každou budovu
+            Spravujte proměnné, které jsou dostupné pro tuto budovu
           </p>
         </div>
         <Button onClick={() => setShowAddModal(true)}>
@@ -194,38 +170,21 @@ export const BuildingVariablesManager: React.FC = () => {
       <Card className="p-6">
         <div className="space-y-4">
           {buildingVariables.map((variable) => (
-            <div key={variable.name} className="flex items-start justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+            <div key={`${variable.name}-${variable.building_id}`} className="flex items-start justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
               <div className="flex-1">
                 <div className="flex items-center space-x-2 mb-1">
                   <h3 className="font-medium text-gray-900 dark:text-gray-100">
                     {variable.description}
                   </h3>
-                  {variable.required && (
-                    <span className="text-xs bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-200 px-2 py-1 rounded-full">
-                      Povinné
-                    </span>
-                  )}
-                  <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200 px-2 py-1 rounded-full">
-                    {variable.type === 'text' && 'Text'}
-                    {variable.type === 'textarea' && 'Dlouhý text'}
-                    {variable.type === 'select' && 'Výběr'}
-                  </span>
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                   <code className="bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded font-mono">
                     {`{{building.${variable.name}}}`}
                   </code>
                 </div>
-                {variable.placeholder && (
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Placeholder: {variable.placeholder}
-                  </div>
-                )}
-                {variable.options && (
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Možnosti: {Array.isArray(variable.options) ? variable.options.join(', ') : ''}
-                  </div>
-                )}
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Hodnota: {variable.value || <em className="text-gray-400">Není nastaveno</em>}
+                </div>
               </div>
               <div className="flex space-x-2 ml-4">
                 <Button
@@ -280,83 +239,21 @@ export const BuildingVariablesManager: React.FC = () => {
             onChange={(e) => setNewVariable({ ...newVariable, description: e.target.value })}
             placeholder="Popis toho, co proměnná obsahuje"
           />
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Typ pole
-            </label>
-            <select
-              value={newVariable.type}
-              onChange={(e) => setNewVariable({ ...newVariable, type: e.target.value as 'text' | 'textarea' | 'select' })}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              title="Typ pole"
-            >
-              <option value="text">Textové pole</option>
-              <option value="textarea">Dlouhý text (textarea)</option>
-              <option value="select">Výběr z možností</option>
-            </select>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="required"
-              checked={newVariable.required}
-              onChange={(e) => setNewVariable({ ...newVariable, required: e.target.checked })}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <label htmlFor="required" className="text-sm text-gray-700 dark:text-gray-300">
-              Povinné pole
-            </label>
-          </div>
-
+          
           <Input
-            label="Placeholder text"
-            value={newVariable.placeholder}
-            onChange={(e) => setNewVariable({ ...newVariable, placeholder: e.target.value })}
-            placeholder="Nápověda pro uživatele"
-            helperText="Nepovinný text, který se zobrazí jako nápověda v poli"
+            label="Hodnota"
+            value={newVariable.value}
+            onChange={(e) => setNewVariable({ ...newVariable, value: e.target.value })}
+            placeholder="Hodnota proměnné"
           />
 
-          {newVariable.type === 'select' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Možnosti výběru
-              </label>
-              <div className="space-y-2">
-                {newVariable.options.map((option, index) => (
-                  <div key={index} className="flex space-x-2">
-                    <input
-                      type="text"
-                      value={option}
-                      onChange={(e) => updateOption(index, e.target.value)}
-                      placeholder={`Možnost ${index + 1}`}
-                      className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    {newVariable.options.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="danger"
-                        size="sm"
-                        onClick={() => removeOption(index)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={addOption}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Přidat možnost
-                </Button>
-              </div>
-            </div>
-          )}
+          <Input
+            label="ID budovy"
+            value={newVariable.building_id}
+            onChange={(e) => setNewVariable({ ...newVariable, building_id: e.target.value })}
+            placeholder="ID budovy, ke které proměnná patří"
+            helperText="UUID budovy"
+          />
 
           <div className="flex justify-end space-x-3">
             <Button variant="secondary" onClick={closeModal}>
@@ -374,35 +271,17 @@ export const BuildingVariablesManager: React.FC = () => {
           Jak fungují proměnné pro budovy
         </h3>
         <div className="prose dark:prose-invert max-w-none text-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
-                Dvoufázový systém
-              </h4>
-              <p className="text-gray-600 dark:text-gray-400 mb-3">
-                <strong>1. Definice šablony:</strong> Zde vytvoříte "prázdný rámeček" pro informaci. 
-                Řeknete systému: "Každá budova bude mít proměnnou {`{{building.ico}}`}".
-              </p>
-              <p className="text-gray-600 dark:text-gray-400">
-                <strong>2. Vyplnění hodnoty:</strong> Při editaci konkrétní budovy systém zobrazí 
-                pole pro všechny definované proměnné a vy vyplníte konkrétní hodnoty.
-              </p>
-            </div>
-            <div>
-              <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">
-                Typy polí
-              </h4>
-              <p className="text-gray-600 dark:text-gray-400 mb-3">
-                <strong>Text:</strong> Krátké textové informace jako IČO, telefon, název.
-              </p>
-              <p className="text-gray-600 dark:text-gray-400 mb-3">
-                <strong>Dlouhý text:</strong> Víceřádkové texty jako poznámky nebo adresy.
-              </p>
-              <p className="text-gray-600 dark:text-gray-400">
-                <strong>Výběr:</strong> Dropdown s přednastavenými možnostmi jako způsob oslovení.
-              </p>
-            </div>
-          </div>
+          <p className="text-gray-600 dark:text-gray-400 mb-3">
+            Proměnné budovy umožňují ukládat specifické informace o budově, které mohou být použity v šablonách dokumentů a e-mailů.
+          </p>
+          <p className="text-gray-600 dark:text-gray-400 mb-3">
+            <strong>Příklad použití:</strong> Pro každou budovu můžete definovat proměnné jako IČO, adresa sídla, 
+            kontaktní údaje na správce a další informace, které se často používají v komunikaci.
+          </p>
+          <p className="text-gray-600 dark:text-gray-400">
+            <strong>V šablonách</strong> poté stačí použít zápis <code>{'{'}{'{'}"building.nazev_promenne"{'}'}{'}'}</code> a systém
+            automaticky doplní uloženou hodnotu pro konkrétní budovu.
+          </p>
         </div>
       </Card>
     </div>

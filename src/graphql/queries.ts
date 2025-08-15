@@ -29,34 +29,15 @@ export const GET_VOTE_DETAILS = gql`
         text
         description
         quorum_type
-        custom_quorum
+        custom_quorum_numerator
+        custom_quorum_denominator
       }
-      member_votes {
-        member_id
-        answers
-        note
-        attachments {
-          id
-          file_name
-        }
-      }
-      attachments {
-        id
-        file_name
-        file_size
-        created_at
-        note
-        member {
-          id
-          name
-          unit
-        }
-      }
-      observers {
-        id
-        name
-        email
-      }
+      observers
+    }
+    member_votes_rows: member_votes(where: {vote_id: {_eq: $voteId}}) {
+      member_id
+      question_id
+      answer
     }
     members(where: {building_id: {_eq: $buildingId}}) {
       id
@@ -104,9 +85,10 @@ export const GET_DATA_FOR_INVITATION_MODAL = gql`
       is_global
     }
     global_variables {
-      id
       name
       value
+      description
+      is_editable
     }
   }
 `;

@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import { Save, RotateCcw, Globe, Shield, Database, Bell, Palette, Send, TestTube, CreditCard } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, RotateCcw, Globe, Shield, Database, Bell, Palette, Send, TestTube, CreditCard, AlertCircle } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { useQuery, useMutation, useLazyQuery } from '@apollo/client';
-import { GET_SETTINGS, UPDATE_SETTINGS } from '../../graphql/settings';
+import { GET_SETTINGS, UPDATE_SETTINGS, GET_DEFAULT_SETTINGS } from '../../graphql/settings';
 import { SEND_TEST_SMS_MUTATION, GET_SMS_CREDIT_QUERY, TEST_SMS_CONNECTION_QUERY } from '../../graphql/sms';
 
 // Definice typů pro jednotlivé sekce nastavení
@@ -70,35 +70,52 @@ export const SettingsView = () => {
 
   const { loading: loadingSettings, error: settingsError } = useQuery(GET_SETTINGS, {
     onCompleted: (data) => {
-      if (data && data.settings) {
-        const fetchedSettingsAsObject = data.settings.reduce((obj: Record<string, unknown>, item: { key: string; value: unknown }) => {
-            obj[item.key] = item.value;
-            return obj;
-        }, {});
-        
-        const newSettings: AppSettings = {
-            general: { ...initialSettings.general, ...(fetchedSettingsAsObject.general as Partial<GeneralSettings> || {}) },
-            sms: { ...initialSettings.sms, ...(fetchedSettingsAsObject.sms as Partial<SmsSettings> || {}) },
-            security: { ...initialSettings.security, ...(fetchedSettingsAsObject.security as Partial<SecuritySettings> || {}) },
-            notifications: { ...initialSettings.notifications, ...(fetchedSettingsAsObject.notifications as Partial<NotificationSettings> || {}) },
-            appearance: { ...initialSettings.appearance, ...(fetchedSettingsAsObject.appearance as Partial<AppearanceSettings> || {}) },
-        };
+      if (data && data.settings && data.settings.length > 0) {
+        try {
+          const fetchedSettingsAsObject = data.settings.reduce((obj: Record<string, unknown>, item: { key: string; value: unknown }) => {
+              obj[item.key] = item.value;
+              return obj;
+          }, {});
+          
+          const newSettings: AppSettings = {
+              general: { ...initialSettings.general, ...(fetchedSettingsAsObject.general as Partial<GeneralSettings> || {}) },
+              sms: { ...initialSettings.sms, ...(fetchedSettingsAsObject.sms as Partial<SmsSettings> || {}) },
+              security: { ...initialSettings.security, ...(fetchedSettingsAsObject.security as Partial<SecuritySettings> || {}) },
+              notifications: { ...initialSettings.notifications, ...(fetchedSettingsAsObject.notifications as Partial<NotificationSettings> || {}) },
+              appearance: { ...initialSettings.appearance, ...(fetchedSettingsAsObject.appearance as Partial<AppearanceSettings> || {}) },
+          };
 
-        if (!newSettings.sms.password) {
-            newSettings.sms.password = '';
-        }
+          if (!newSettings.sms.password) {
+              newSettings.sms.password = '';
+          }
 
-        setSettings(newSettings);
-        const deepClonedSettings = JSON.parse(JSON.stringify(newSettings));
-        if (deepClonedSettings.sms.password) {
-            deepClonedSettings.sms.password = '';
+          setSettings(newSettings);
+          const deepClonedSettings = JSON.parse(JSON.stringify(newSettings));
+          if (deepClonedSettings.sms.password) {
+              deepClonedSettings.sms.password = '';
+          }
+          setOriginalSettings(deepClonedSettings);
+        } catch (err) {
+          console.error("Chyba při zpracování nastavení:", err);
+          showToast("Nepodařilo se zpracovat nastavení. Používám výchozí hodnoty.", "warning");
+          setSettings(initialSettings);
+          setOriginalSettings(JSON.parse(JSON.stringify(initialSettings)));
         }
-        setOriginalSettings(deepClonedSettings);
+      } else {
+        // Pokud nejsou žádná nastavení, použijeme výchozí
+        console.log("Nebyla nalezena žádná nastavení, používám výchozí hodnoty");
+        setSettings(initialSettings);
+        setOriginalSettings(JSON.parse(JSON.stringify(initialSettings)));
       }
     },
     onError: (error) => {
+        console.error("Chyba při načítání nastavení:", error);
         showToast(`Chyba při načítání nastavení: ${error.message}`, 'error');
-    }
+        // I v případě chyby použijeme výchozí nastavení
+        setSettings(initialSettings);
+        setOriginalSettings(JSON.parse(JSON.stringify(initialSettings)));
+    },
+    fetchPolicy: 'network-only' // Vždy načteme aktuální data
   });
 
   const [updateSettingsMutation, { loading: isSaving }] = useMutation(UPDATE_SETTINGS);
@@ -576,8 +593,37 @@ export const SettingsView = () => {
   );
 
   const renderActiveSection = () => {
-    if (loadingSettings) return <p>Načítání nastavení...</p>;
-    if (settingsError) return <p>Chyba při načítání nastavení. Zkuste to prosím znovu.</p>;
+    if (loadingSettings) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+            <p className="text-gray-700 dark:text-gray-300">Načítání nastavení...</p>
+          </div>
+        </div>
+      );
+    }
+    
+    if (settingsError) {
+      return (
+        <Card className="p-6">
+          <div className="flex flex-col items-center justify-center space-y-4 py-8">
+            <div className="rounded-full bg-red-100 dark:bg-red-900/20 p-3">
+              <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+              Chyba při načítání nastavení
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md">
+              Vyskytl se problém při načítání nastavení aplikace. Zobrazujeme výchozí hodnoty.
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              Zkusit znovu
+            </Button>
+          </div>
+        </Card>
+      );
+    }
 
     switch (activeSection) {
       case 'general': return renderGeneralSettings();

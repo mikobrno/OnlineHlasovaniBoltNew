@@ -31,10 +31,11 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
     skip: !buildingId,
   });
 
-  const voteObserverIds = vote.observers?.map(o => o.id) || [];
+  // Observers v votes jsou pole textů (emailů)
+  const voteObserverEmails = vote.observers || [];
   const buildingObservers: Observer[] = observersData?.observers || [];
-  const voteObservers = buildingObservers.filter(o => voteObserverIds.includes(o.id));
-  const availableObservers = buildingObservers.filter(o => !voteObserverIds.includes(o.id));
+  const voteObservers = buildingObservers.filter(o => voteObserverEmails.includes(o.email));
+  const availableObservers = buildingObservers.filter(o => !voteObserverEmails.includes(o.email));
 
   const [createObserver] = useMutation(CREATE_OBSERVER);
   const [addObserverToVote] = useMutation(ADD_OBSERVER_TO_VOTE, {
@@ -60,9 +61,15 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
           building_id: buildingId,
         },
       });
-      const createdObserverId = data?.insert_observers_one?.id;
-      if (createdObserverId) {
-        await handleAddExistingObserver(createdObserverId);
+      const createdObserver = data?.insert_observers_one;
+      if (createdObserver) {
+        // Předáváme pouze email, ne celý observer objekt
+        await addObserverToVote({ 
+          variables: { 
+            vote_id: vote.id, 
+            observer_email: createdObserver.email 
+          } 
+        });
         showToast('Nový pozorovatel byl vytvořen a přiřazen k hlasování.', 'success');
         setNewObserver({ name: '', email: '' });
         setShowAddModal(false);
@@ -74,9 +81,9 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
     }
   };
 
-  const handleAddExistingObserver = async (observerId: string) => {
+  const handleAddExistingObserver = async (observer: Observer) => {
     try {
-      await addObserverToVote({ variables: { vote_id: vote.id, observer_id: observerId } });
+      await addObserverToVote({ variables: { vote_id: vote.id, observer_email: observer.email } });
       showToast('Pozorovatel byl přidán k hlasování.', 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Neznámá chyba';
@@ -84,10 +91,10 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
     }
   };
 
-  const handleRemoveObserver = async (observerId: string) => {
+  const handleRemoveObserver = async (observer: Observer) => {
     if (window.confirm('Opravdu chcete odebrat tohoto pozorovatele z hlasování?')) {
       try {
-        await removeObserverFromVote({ variables: { vote_id: vote.id, observer_id: observerId } });
+        await removeObserverFromVote({ variables: { vote_id: vote.id, observer_email: observer.email } });
         showToast('Pozorovatel byl odebrán z hlasování.', 'success');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Neznámá chyba';
@@ -100,8 +107,8 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
     if (window.confirm(`Opravdu chcete trvale smazat pozorovatele ${observer.name}? Tato akce je nevratná.`)) {
       try {
         // Nejprve odebrat z hlasování, pokud je přiřazen
-        if (voteObserverIds.includes(observer.id)) {
-          await removeObserverFromVote({ variables: { vote_id: vote.id, observer_id: observer.id } });
+        if (voteObserverEmails.includes(observer.email)) {
+          await removeObserverFromVote({ variables: { vote_id: vote.id, observer_email: observer.email } });
         }
         await deleteObserver({ variables: { id: observer.id } });
         showToast('Pozorovatel byl smazán.', 'success');
@@ -181,7 +188,7 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
                   <Button
                     size="sm"
                     variant="danger"
-                    onClick={() => handleRemoveObserver(observer.id)}
+                    onClick={() => handleRemoveObserver(observer)}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -212,7 +219,7 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
                 <div className="flex space-x-2">
                   <Button
                     size="sm"
-                    onClick={() => handleAddExistingObserver(observer.id)}
+                    onClick={() => handleAddExistingObserver(observer)}
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Přidat

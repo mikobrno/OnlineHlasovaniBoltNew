@@ -35,20 +35,21 @@ export interface DocumentTemplate {
 }
 
 export interface BuildingVariable {
-  id: string;
   name: string;
+  building_id: string;
   description: string;
-  type: 'text' | 'textarea' | 'select';
-  required: boolean;
-  placeholder?: string;
-  options?: string[];
+  value: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface GlobalVariable {
-  id: string;
   name: string;
   value: string;
   description?: string;
+  is_editable?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Vote {
@@ -70,6 +71,7 @@ export interface Vote {
     }[];
     member_votes?: MemberVote[];
     attachments?: VoteAttachment[];
+    observers?: string[];
     created_at: string;
     description?: string;
   }

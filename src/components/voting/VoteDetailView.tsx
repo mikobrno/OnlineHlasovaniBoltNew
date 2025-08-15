@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Edit, Mail, Download, FileText, BarChart3, Eye, Play, Paperclip, FileDown } from 'lucide-react';
+import { ArrowLeft, Edit, Mail, FileText, BarChart3, Eye, Play, FileDown } from 'lucide-react';
 import { useMutation, useQuery } from '@apollo/client';
 import { useToast } from '../../contexts/ToastContext';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
-import { Modal } from '../common/Modal';
 import { formatDate, getVoteStatusText, getVoteStatusColor } from '../../lib/utils';
 import { VotingProgressView } from './VotingProgressView';
 import { ResultsView } from './ResultsView';
@@ -13,7 +12,7 @@ import { ObserversView } from './ObserversView';
 import { BallotTemplateModal } from './BallotTemplateModal';
 import { GET_VOTE_DETAILS } from '../../graphql/queries';
 import { START_VOTE } from '../../graphql/mutations';
-import { Vote, Member, VoteAttachment } from '../../types';
+import { Vote, Member } from '../../types';
 
 interface VoteDetailViewProps {
   voteId: string;
@@ -30,8 +29,7 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
 }) => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'info' | 'members' | 'observers' | 'progress' | 'results' | 'attachments'>('info');
-  const [showAttachmentModal, setShowAttachmentModal] = useState(false);
-  const [selectedAttachment, setSelectedAttachment] = useState<VoteAttachment | null>(null);
+  // attachments odstraněny (zatím neimplementováno v DB)
   const [showBallotModal, setShowBallotModal] = useState(false);
 
   const { data, loading, error } = useQuery(GET_VOTE_DETAILS, {
@@ -54,14 +52,47 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
   if (loading) return <p>Načítání detailu hlasování...</p>;
   if (error) return <p>Chyba: {error.message}</p>;
 
-  const vote: Vote = data?.votes_by_pk;
+  // Transformace custom_quorum numer/denom na objekt kvůli staršímu typu Vote
+  type RawQuestion = {
+    id: string;
+    text: string;
+    description?: string;
+    quorum_type?: string;
+    custom_quorum_numerator?: number | null;
+    custom_quorum_denominator?: number | null;
+  };
+  const vote: Vote | undefined = data?.votes_by_pk ? {
+    ...data.votes_by_pk,
+    questions: (data.votes_by_pk.questions as RawQuestion[]).map((q) => ({
+      id: q.id,
+      text: q.text,
+      description: q.description,
+  quorum_type: (q.quorum_type as 'simple' | 'qualified' | 'unanimous' | 'custom' | undefined),
+      custom_quorum: (q.custom_quorum_numerator && q.custom_quorum_denominator)
+        ? { numerator: q.custom_quorum_numerator, denominator: q.custom_quorum_denominator }
+        : undefined
+    }))
+    // Rekonstrukce staré struktury member_votes: answers { [questionId]: answer }
+  ,
+    member_votes: data.member_votes_rows ? Object.values(
+      (data.member_votes_rows as { member_id: string; question_id: string; answer: 'yes' | 'no' | 'abstain' | null }[]).reduce((acc, row) => {
+        if (!acc[row.member_id]) {
+          acc[row.member_id] = { member_id: row.member_id, answers: {} as Record<string, 'yes' | 'no' | 'abstain'> };
+        }
+        if (row.question_id && row.answer) {
+          acc[row.member_id].answers[row.question_id] = row.answer;
+        }
+        return acc;
+      }, {} as Record<string, { member_id: string; answers: Record<string, 'yes' | 'no' | 'abstain'> }>)
+  ) : [],
+  } : undefined;
   const members: Member[] = data?.members || [];
-  const attachments: VoteAttachment[] = vote?.attachments || [];
+  // attachments nejsou podporovány v aktuálním schématu
   
   if (!vote) return <p>Hlasování nebylo nalezeno.</p>;
 
   const votedMembersCount = vote.member_votes?.length || 0;
-  const hasManualVoteAttachments = attachments.length > 0;
+  // attachments nejsou podporovány
 
   const handleStartVote = async () => {
     if (window.confirm('Opravdu chcete spustit hlasování? Tato akce je nevratná.')) {
@@ -69,21 +100,15 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
     }
   };
 
-  const showMemberAttachments = (attachmentId: string) => {
-    const attachment = attachments.find(a => a.id === attachmentId);
-    if (attachment) {
-      setSelectedAttachment(attachment);
-      setShowAttachmentModal(true);
-    }
-  };
+  // Funkce pro zobrazení příloh odstraněna
   
   const tabs = [
     { id: 'info', label: 'Informace', icon: <FileText className="w-4 h-4" /> },
     { id: 'members', label: 'Členové', icon: <Mail className="w-4 h-4" /> },
     { id: 'observers', label: 'Pozorovatelé', icon: <Eye className="w-4 h-4" /> },
-    ...(hasManualVoteAttachments ? [{ id: 'attachments', label: 'Přílohy', icon: <Paperclip className="w-4 h-4" /> }] : []),
-    ...(vote.status === 'active' ? [{ id: 'progress', label: 'Průběh', icon: <BarChart3 className="w-4 h-4" /> }] : []),
-    ...(vote.status === 'completed' ? [{ id: 'results', label: 'Výsledky', icon: <BarChart3 className="w-4 h-4" /> }] : [])
+  // attachments tab odstraněn
+  ...(vote.status === 'active' ? [{ id: 'progress', label: 'Průběh', icon: <BarChart3 className="w-4 h-4" /> }] : []),
+  ...(vote.status === 'completed' ? [{ id: 'results', label: 'Výsledky', icon: <BarChart3 className="w-4 h-4" /> }] : [])
   ];
 
   const renderTabContent = () => {
@@ -92,8 +117,6 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
         return <MemberManagementView vote={vote} members={members} />;
       case 'observers':
         return <ObserversView vote={vote} buildingId={buildingId} />;
-      case 'attachments':
-        return renderAttachmentsView();
       case 'progress':
         return vote.status === 'active' ? <VotingProgressView vote={vote} members={members} /> : null;
       case 'results':
@@ -158,12 +181,7 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
                   <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                     <div>Hlasovalo: {votedMembersCount} z {members.length} členů</div>
                     <div>Účast: {members.length > 0 ? Math.round((votedMembersCount / members.length) * 100) : 0}%</div>
-                    {hasManualVoteAttachments && (
-                      <div className="flex items-center space-x-1 text-blue-600 dark:text-blue-400">
-                        <Paperclip className="w-3 h-3" />
-                        <span>Obsahuje přílohy k ručním hlasům</span>
-                      </div>
-                    )}
+                    {/* attachments info odstraněno */}
                   </div>
                 </div>
               </div>
@@ -173,110 +191,26 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 Hlasovací otázky ({vote.questions.length})
               </h3>
-              <div className="space-y-4">
+              <ul className="list-disc pl-6 space-y-2">
                 {vote.questions.map((question, index) => (
-                  <div key={question.id} className="border-l-4 border-blue-500 pl-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                          {index + 1}. {question.text}
-                        </h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          Kvórum: {question.quorum_type === 'simple' && 'Prostá většina (1/2)'}
-                          {question.quorum_type === 'qualified' && 'Kvalifikovaná většina (2/3)'}
-                          {question.quorum_type === 'unanimous' && 'Jednomyslné'}
-                          {question.quorum_type === 'custom' && question.custom_quorum && 
-                            `Vlastní (${question.custom_quorum.numerator}/${question.custom_quorum.denominator})`
-                          }
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <li key={question.id} className="text-sm text-gray-700 dark:text-gray-300">
+                    <span className="font-medium">{index + 1}. {question.text}</span>{' '}
+                    <span className="italic">
+                      ({question.quorum_type === 'simple' && '1/2'}
+                      {question.quorum_type === 'qualified' && '2/3'}
+                      {question.quorum_type === 'unanimous' && '100%'}
+                      {question.quorum_type === 'custom' && question.custom_quorum && `${question.custom_quorum.numerator}/${question.custom_quorum.denominator}`})
+                    </span>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </Card>
           </div>
         );
     }
   };
 
-  const renderAttachmentsView = () => {
-    // Seskupit přílohy podle členů
-    const attachmentsByMember = attachments.reduce((acc, attachment) => {
-      const memberId = attachment.member?.id;
-      if (!memberId || !attachment.member) return acc;
-      if (!acc[memberId]) {
-        acc[memberId] = {
-          member: attachment.member,
-          attachments: []
-        };
-      }
-      acc[memberId].attachments.push(attachment);
-      return acc;
-    }, {} as Record<string, { member: NonNullable<VoteAttachment['member']>; attachments: VoteAttachment[] }>);
-
-    const membersWithAttachments = Object.values(attachmentsByMember);
-
-    return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-            Přílohy k ručním hlasům
-          </h3>
-          <div className="text-sm text-gray-600 dark:text-gray-400">
-            {membersWithAttachments.length} členů s přílohami
-          </div>
-        </div>
-
-        {membersWithAttachments.length === 0 ? (
-          <Card className="p-8">
-            <div className="text-center text-gray-500 dark:text-gray-400">
-              <Paperclip className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>Žádné přílohy k ručním hlasům</p>
-            </div>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {membersWithAttachments.map(({ member, attachments }) => (
-              <Card key={member.id} className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                      {member.name}
-                    </h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Jednotka: {member.unit} | {attachments.length} příloh
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {attachments.map((attachment) => (
-                    <div key={attachment.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <FileText className="w-5 h-5 text-gray-500" />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">
-                          {attachment.file_name}
-                        </span>
-                      </div>
-                      <Button 
-                        size="sm" 
-                        variant="secondary"
-                        onClick={() => showMemberAttachments(attachment.id)}
-                      >
-                        <Eye className="w-4 h-4 mr-2" />
-                        Zobrazit
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
+  // attachments view odstraněn
 
   return (
     <div>
@@ -301,62 +235,13 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
             >
               {tab.icon}
               <span>{tab.label}</span>
-              {tab.id === 'attachments' && hasManualVoteAttachments && (
-                <span className="bg-blue-100 text-blue-800 dark:bg-blue-800 dark:text-blue-200 text-xs px-2 py-0.5 rounded-full">
-                  {attachments.length}
-                </span>
-              )}
+              {/* attachments badge removed */}
             </button>
           ))}
         </nav>
       </div>
 
-      {renderTabContent()}
-
-      <Modal
-        isOpen={showAttachmentModal}
-        onClose={() => setShowAttachmentModal(false)}
-        title={`Příloha - ${selectedAttachment?.member?.name}`}
-        size="lg"
-      >
-        {selectedAttachment && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 border dark:border-gray-700 rounded-lg">
-              <div className="flex items-center space-x-3">
-                <FileText className="w-5 h-5 text-gray-500" />
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-gray-100">
-                    {selectedAttachment.file_name}
-                  </div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {Math.round(selectedAttachment.file_size / 1024)} KB
-                  </div>
-                </div>
-              </div>
-              <Button size="sm" variant="secondary">
-                <Download className="w-4 h-4 mr-2" />
-                Stáhnout
-              </Button>
-            </div>
-
-            {selectedAttachment.note && (
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Poznámka</h4>
-                <p className="text-blue-800 dark:text-blue-200">
-                  {selectedAttachment.note}
-                </p>
-              </div>
-            )}
-
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              <p>Nahráno: {formatDate(selectedAttachment.created_at)}</p>
-              {selectedAttachment.member && (
-                <p>Člen: {selectedAttachment.member.name} (jednotka {selectedAttachment.member.unit})</p>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
+  {renderTabContent()}
 
   <BallotTemplateModal vote={vote} isOpen={showBallotModal} onClose={() => setShowBallotModal(false)} />
     </div>

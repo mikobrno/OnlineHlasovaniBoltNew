@@ -2,13 +2,10 @@ import { gql } from '@apollo/client';
 
 export const BUILDING_VARIABLE_FIELDS = gql`
   fragment BuildingVariableFields on building_variables {
-    id
     name
+    building_id
     description
-    type
-    required
-    placeholder
-    options
+    value
     created_at
     updated_at
   }
@@ -33,8 +30,8 @@ export const ADD_BUILDING_VARIABLE = gql`
 `;
 
 export const UPDATE_BUILDING_VARIABLE = gql`
-  mutation UpdateBuildingVariable($id: uuid!, $variable: building_variables_set_input!) {
-    update_building_variables_by_pk(pk_columns: { id: $id }, _set: $variable) {
+  mutation UpdateBuildingVariable($name: String!, $building_id: uuid!, $variable: building_variables_set_input!) {
+    update_building_variables_by_pk(pk_columns: { name: $name, building_id: $building_id }, _set: $variable) {
       ...BuildingVariableFields
     }
   }
@@ -42,9 +39,10 @@ export const UPDATE_BUILDING_VARIABLE = gql`
 `;
 
 export const DELETE_BUILDING_VARIABLE = gql`
-  mutation DeleteBuildingVariable($id: uuid!) {
-    delete_building_variables_by_pk(id: $id) {
-      id
+  mutation DeleteBuildingVariable($name: String!, $building_id: uuid!) {
+    delete_building_variables_by_pk(pk_columns: { name: $name, building_id: $building_id }) {
+      name
+      building_id
     }
   }
 `;

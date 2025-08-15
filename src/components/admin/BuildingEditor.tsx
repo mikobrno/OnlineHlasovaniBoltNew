@@ -22,7 +22,7 @@ interface Building {
 interface BuildingVariable {
   name: string;
   description: string;
-  type: 'text' | 'textarea' | 'select';
+  type: 'text' | 'textarea' | 'select' | 'number';
   required: boolean;
   placeholder?: string;
   options?: string[];
