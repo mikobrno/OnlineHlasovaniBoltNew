@@ -1,61 +1,39 @@
 // src/contexts/AuthContext.tsx
-import React, { createContext } from 'react';
+import React, { createContext, useContext } from 'react';
 import { useAuthenticationStatus, useUserData, useSignInEmailPassword, useSignOut } from '@nhost/react';
 
-// Tento interface bude reprezentovat data o uživateli, která dostaneme od Nhost
-interface User {
-  id: string;
-  email?: string;
-  displayName?: string;
-  // Můžeme přidat další role a vlastnosti podle potřeby
-  [key: string]: unknown; 
-}
-
 interface AuthContextType {
-  user: User | null;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ error?: { message: string } }>;
-  logout: () => Promise<void>;
   isAuthenticated: boolean;
+  isLoading: boolean;
+  user: unknown;
+  login: (email: string, password: string) => Promise<{ error: { message: string } | null }>;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: React.ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuthenticationStatus();
-  const nhostUser = useUserData();
+  const user = useUserData();
   const { signInEmailPassword } = useSignInEmailPassword();
   const { signOut } = useSignOut();
 
   const login = async (email: string, password: string) => {
     const { error } = await signInEmailPassword(email, password);
-    if (error) {
-      return { error: { message: error.message } };
-    }
-    return {};
+    return { error: error ? { message: error.message } : null };
   };
 
-  const logout = async () => {
-    await signOut();
-  };
-
-  const value: AuthContextType = {
-    user: nhostUser as User | null,
-    isLoading,
-    login,
-    logout,
-    isAuthenticated
-  };
+  const logout = async () => { await signOut(); };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
-export { AuthContext };
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
+  return context;
+};
