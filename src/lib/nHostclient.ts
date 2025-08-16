@@ -1,10 +1,7 @@
 // src/lib/nhostClient.ts
-import { NhostClient } from '@nhost/nextjs';
+import { NhostClient } from '@nhost/nhost-js';
 
 export const nhost = new NhostClient({
-    // TODO: Doplňte skutečné údaje nebo použijte env proměnné
-    subdomain: 'your-nhost-subdomain',
-    region: 'your-nhost-region'
+  subdomain: import.meta.env.VITE_NHOST_SUBDOMAIN!,
+  region: import.meta.env.VITE_NHOST_REGION!
 });
-
-export default nhost;

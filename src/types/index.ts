@@ -30,6 +30,19 @@ export interface Question {
   custom_quorum_denominator?: number;
 }
 
+// Typy pro Nhost autentizaci
+export interface NhostSession {
+  accessToken: string;
+  user: NhostUser;
+}
+
+export interface NhostUser {
+  id: string;
+  email: string;
+  displayName?: string;
+  metadata?: Record<string, unknown>;
+}
+
 // Základní typ pro Hlasování
 export interface Vote {
   id: string;
@@ -40,9 +53,18 @@ export interface Vote {
   questions: Question[];
   created_at: string;
   start_date?: string;
-  endDate?: string; // Změna kvůli kompatibilitě se starým kódem
-  attachments?: string[];
+  end_date?: string;
+  manual_vote_attachments?: Array<{
+    id: string;
+    attachment_name: string;
+    created_at: string;
+    member?: {
+      id: string;
+      name: string;
+      unit: string;
+    };
+  }>;
   observers?: string[];
-  memberVotes: Record<string, Record<string, 'yes' | 'no' | 'abstain'>>; // Dočasné
+  memberVotes?: Record<string, Record<string, 'yes' | 'no' | 'abstain'>>;
 }
 

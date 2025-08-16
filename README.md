@@ -1,14 +1,14 @@
 # Online Hlasování - Systém pro SVJ
 
-Moderní webová aplikace pro správu hlasování ve společenstvích vlastníků jednotek (SVJ) s integrací Supabase a nasazením na Netlify.
+Moderní webová aplikace pro správu hlasování ve společenstvích vlastníků jednotek (SVJ) s integrací Nhost a nasazením na Netlify.
 
 ## 🚀 Technologie
 
 - **Frontend**: React 18 + TypeScript + Vite
 - **Styling**: Tailwind CSS
-- **Database**: Supabase (PostgreSQL)
-- **Authentication**: Supabase Auth
-- **Hosting**: Netlify
+- **Database**: Nhost (PostgreSQL + Hasura)
+- **Authentication**: Nhost Auth
+- **Hosting**: Netlify/Nhost
 - **AI**: Google Gemini API
 - **SMS**: SMSbrana.cz
 
@@ -44,7 +44,7 @@ Audit: Pokud narazíte na import `../data/mockData`, jde o relikt – odstraňte
 
 - Node.js 18+
 - npm nebo yarn
-- Supabase account
+- Docker a Docker Compose
 - Google Cloud account (pro Gemini API)
 - SMSbrana.cz account
 
@@ -70,9 +70,9 @@ Audit: Pokud narazíte na import `../data/mockData`, jde o relikt – odstraňte
 
    Upravte `.env` soubor:
    ```env
-   # Supabase Configuration
-   VITE_SUPABASE_URL=your_supabase_url
-   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   # Nhost Configuration
+   VITE_NHOST_SUBDOMAIN=your-subdomain
+   VITE_NHOST_REGION=your-region
 
    # Google Gemini API
    VITE_GEMINI_API_KEY=your_gemini_api_key
@@ -82,21 +82,27 @@ Audit: Pokud narazíte na import `../data/mockData`, jde o relikt – odstraňte
    VITE_SMSBRANA_PASSWORD=your_password
    ```
 
-4. **Spuštění vývojového serveru**
+4. **Spuštění lokálního Nhost prostředí**
+   ```bash
+   ./scripts/start-nhost-local.sh
+   ```
+
+5. **Spuštění vývojového serveru**
    ```bash
    npm run dev
    ```
 
    Aplikace bude dostupná na `http://localhost:3000`
+   Hasura Console bude dostupná na `http://localhost:1337/console`
 
-## 🗄️ Databáze (Supabase)
+## 🗄️ Databáze (Nhost)
 
-### Nastavení Supabase
+### Nastavení Nhost
 
-1. Vytvořte nový projekt na [supabase.com](https://supabase.com)
-2. Spusťte migrace databáze (viz `migrateData.js`)
-3. Nastavte Row Level Security (RLS) políticas
-4. Nakonfigurujte Storage pro přílohy
+1. Vytvořte nový projekt na [nhost.io](https://nhost.io)
+2. Spusťte inicializační SQL skripty (viz `database/nhost-schema.sql`)
+3. Nakonfigurujte Hasura permissions a relationships
+4. Nastavte Storage pro přílohy
 
 ### Migrace dat
 
@@ -166,19 +172,35 @@ npx netlify deploy --prod --dir=dist
 
 ## 🔧 Konfigurace
 
-### Supabase konfigurace
+### Nhost konfigurace
 
-1. **RLS Policy**
-   ```sql
-   -- Example policy for buildings table
-   CREATE POLICY "Allow public read" ON buildings FOR SELECT USING (true);
-   CREATE POLICY "Allow authenticated write" ON buildings FOR ALL USING (auth.role() = 'authenticated');
+1. **Hasura Permissions**
+   ```graphql
+   # Example permission for buildings table
+   {
+     "role": "public",
+     "permission": {
+       "columns": ["id", "name", "address"],
+       "filter": {},
+       "allow_aggregations": true
+     }
+   }
    ```
 
-2. **Storage Bucket**
+2. **Storage Configuration**
    ```sql
-   -- Create bucket for attachments
-   INSERT INTO storage.buckets (id, name, public) VALUES ('attachments', 'attachments', true);
+   -- Create storage configuration in Hasura
+   CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+   CREATE TABLE "storage"."files" (
+     "id" uuid DEFAULT uuid_generate_v4(),
+     "name" text NOT NULL,
+     "size" integer NOT NULL,
+     "bucket_id" text NOT NULL,
+     "created_at" timestamptz DEFAULT now(),
+     "updated_at" timestamptz DEFAULT now(),
+     "is_uploaded" boolean DEFAULT false,
+     PRIMARY KEY ("id")
+   );
    ```
 
 ### Email konfigurace
@@ -208,15 +230,16 @@ SMS notifikace jsou implementovány přes SMSbrana.cz API. Nastavte credentials 
 
 ## 📱 API Endpoints
 
-### Veřejné endpoints
+### GraphQL API
+
+- Všechny operace jsou prováděny přes Hasura GraphQL API
+- Queries a mutace jsou definovány v `src/graphql/`
+- Real-time subscriptions přes Hasura WebSocket
+
+### REST Endpoints
 
 - `GET /vote/:token` - Online hlasování
 - `POST /api/verify` - Ověření hlasovacího tokenu
-
-### Administrátorské endpoints
-
-- Všechny CRUD operace přes Supabase client
-- Real-time aktualizace přes Supabase subscriptions
 
 ## 🧪 Testování
 
@@ -229,6 +252,9 @@ npx tsc --noEmit
 
 # Testování buildu
 npm run build && npm run preview
+
+# GraphQL type generation
+npm run codegen
 ```
 
 ## 📦 Produkční optimalizace
@@ -240,12 +266,14 @@ npm run build && npm run preview
 - Asset optimization
 - Service Worker cache (optional)
 
-### Supabase optimalizace
+### Nhost/Hasura optimalizace
 
+- Query caching
+- Prepared statements
 - Connection pooling
-- Query optimalizace
-- Indexy na frequently queried columns
-- RLS pro security
+- Selective field requests
+- Indexy na často dotazované sloupce
+- Rate limiting
 
 ## 🔒 Bezpečnost
 
@@ -253,14 +281,18 @@ npm run build && npm run preview
 
 - Environment proměnné pouze s `VITE_` prefixem
 - XSS ochrana
-- CSRF ochrana přes Supabase
+- CSRF ochrana přes Nhost Auth
+- GraphQL validace a sanitizace
 
-### Backend (Supabase)
+### Backend (Nhost/Hasura)
 
-- Row Level Security (RLS)
-- Secure API keys
+- Role-based access control (RBAC)
+- JWT autentizace
+- Row level permissions
+- Column level permissions
 - Rate limiting
-- Audit logs
+- Audit logy
+- Připravené SQL dotazy
 
 ## 🐛 Troubleshooting
 

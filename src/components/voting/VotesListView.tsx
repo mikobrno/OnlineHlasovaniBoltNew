@@ -11,7 +11,7 @@ import { VoteDetailView } from './VoteDetailView';
 import { GET_VOTES } from '../../graphql/votes';
 import { Vote } from '../../types';
 
-interface VoteWithStats extends Vote { votesCount?: number; vote_statistics?: Record<string, unknown>; }
+interface VoteWithStats extends Vote { votesCount?: number; }
 
 interface VotesListViewProps {
   buildingId: string;
@@ -118,8 +118,7 @@ export const VotesListView: React.FC<VotesListViewProps> = ({ buildingId }) => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredVotes.map((vote: VoteWithStats) => {
-            const stats = (vote.vote_statistics as Record<string, unknown>) || {};
-            const votesCount = stats.total_votes || stats.count || 0;
+            const votesCount = 0; // TODO: Implementovat počítání hlasů
             return (
               <VoteCard
                 key={vote.id}

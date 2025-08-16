@@ -1,7 +1,5 @@
 import { gql } from '@apollo/client';
-
-// This file is for the VOTES LIST feature.
-// For vote details, see queries.ts and mutations.ts.
+import { VOTE_FIELDS } from './fragments';
 
 // Local TypeScript helper types for inserts (not generated)
 export interface QuestionInput {
@@ -23,25 +21,21 @@ export interface VoteInput {
   questions?: { data: QuestionInput[] };
 }
 
-// Fragments
-export const VOTE_LIST_ITEM_FIELDS = gql`
-  fragment VoteListItemFields on votes {
-    id
-    title
-    description
-    status
-    start_date
-    end_date
-    created_at
-  vote_statistics # JSONB pole ve schématu - lze z něj číst agregace, pokud je trigger naplní
-  }
-`;
-
 // Queries
 export const GET_VOTES = gql`
   query GetVotes($buildingId: uuid!) {
-    votes(where: { building_id: { _eq: $buildingId } }, order_by: { created_at: desc }) {
-      ...VoteListItemFields
+    votes(
+      where: { building_id: { _eq: $buildingId } }
+      order_by: { created_at: desc }
+    ) {
+      id
+      title
+      description
+      status
+      start_date
+      end_date
+      created_at
+      building_id
     }
     members_aggregate(where: { building_id: { _eq: $buildingId } }) {
       aggregate {
@@ -49,7 +43,6 @@ export const GET_VOTES = gql`
       }
     }
   }
-  ${VOTE_LIST_ITEM_FIELDS}
 `;
 
 // Mutations

@@ -9,29 +9,17 @@ import { getVoteStatusText, getVoteStatusColor } from '../../lib/utils';
 import { FullPageSpinner } from '../FullPageSpinner';
 import type { Vote, Question } from '../../types'; // Importujeme z nového centrálního typu
 
+// Import GraphQL fragment
+import { VOTE_FIELDS } from '../../graphql/fragments';
+
 // Komplexní GraphQL dotaz, který načte VŠE potřebné pro detail hlasování
 const GET_VOTE_DETAILS_QUERY = gql`
   query GetVoteDetails($voteId: uuid!) {
     vote: votes_by_pk(id: $voteId) {
-      id
-      title
-      description
-      status
-      created_at
-      start_date
-      end_date
-      attachments
-      observers
-      building_id
-      questions(order_by: { order_index: asc }) {
-        id
-        text
-        quorum_type
-        custom_quorum_numerator
-        custom_quorum_denominator
-      }
+      ...VoteFields
     }
   }
+  ${VOTE_FIELDS}
 `;
 
 interface VoteDetailViewProps {
@@ -134,6 +122,33 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
                 </p>
               </div>
             </Card>
+
+            {vote.manual_vote_attachments && vote.manual_vote_attachments.length > 0 && (
+              <Card className="p-6">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+                  Přílohy ({vote.manual_vote_attachments.length})
+                </h3>
+                <div className="space-y-4">
+                  {vote.manual_vote_attachments.map((attachment) => (
+                    <div key={attachment.id} className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-700 last:border-0">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {attachment.attachment_name}
+                        </div>
+                        {attachment.member && (
+                          <div className="text-xs text-gray-500">
+                            Nahrál(a): {attachment.member.name} (jednotka {attachment.member.unit})
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {new Date(attachment.created_at).toLocaleDateString('cs-CZ')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
 
             <Card className="p-6">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
