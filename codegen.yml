@@ -1,7 +1,7 @@
 schema:
-  - ${NHOST_GRAPHQL_URL}:
+  - https://zrgbhrxnkjggssfhjqwp.eu-central-1.nhost.run/v1/graphql:
       headers:
-        x-hasura-admin-secret: ${NHOST_ADMIN_SECRET}
+        x-hasura-admin-secret: "Jrh*^t2%o9&:K^Y&XnP4*-!-J+Jmd&sP"
 documents: "src/**/*.{ts,tsx}"
 generates:
   src/generated/graphql.ts:

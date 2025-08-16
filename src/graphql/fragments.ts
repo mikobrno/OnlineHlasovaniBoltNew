@@ -1,7 +1,7 @@
 import { gql } from '@apollo/client';
 
-export const VOTE_DETAIL_FIELDS = gql`
-  fragment VoteDetailFields on votes {
+export const VOTE_FIELDS_BASIC = gql`
+  fragment VoteFieldsBasic on votes {
     id
     title
     description
@@ -9,25 +9,10 @@ export const VOTE_DETAIL_FIELDS = gql`
     start_date
     end_date
     created_at
-    building_id
-    questions {
+    buildings {
       id
-      text
-      type
-      options
-      required
-      order
-    }
-    observers
-    manual_vote_attachments {
-      id
-      attachment_name
-      created_at
-      member {
-        id
-        name
-        unit
-      }
+      name
+      address
     }
   }
 `;

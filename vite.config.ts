@@ -40,12 +40,22 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
+    cors: {
+      origin: '*',
+      methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE'],
+      credentials: true
+    },
     proxy: {
       '/api/email': {
         target: 'https://n8n.srv882016.hstgr.cloud',
         changeOrigin: true,
         rewrite: (path: string) => path.replace(/^\/api\/email/, '/webhook/ada15a58-b14f-4179-92a1-780b009669a4'),
         secure: true
+      },
+      '/v1': {
+        target: process.env.VITE_NHOST_BACKEND_URL,
+        changeOrigin: true,
+        ws: true
       }
     }
   },

@@ -7,25 +7,75 @@ import { Button } from '../common/Button';
 import { Card } from '../common/Card';
 import { getVoteStatusText, getVoteStatusColor } from '../../lib/utils';
 import { FullPageSpinner } from '../FullPageSpinner';
-import type { Vote, Question } from '../../types'; // Importujeme z nového centrálního typu
+type VoteQuestion = {
+  question: {
+    id: string;
+    text: string;
+    type: string;
+  };
+};
 
-// Import GraphQL fragment
-import { VOTE_DETAIL_FIELDS } from '../../graphql/fragments';
+type Building = {
+  id: string;
+  name: string;
+  address: string;
+};
 
-// Komplexní GraphQL dotaz, který načte VŠE potřebné pro detail hlasování
+type Attachment = {
+  id: string;
+  attachment_name: string;
+  created_at: string;
+  member: {
+    name: string;
+    unit: string;
+  };
+};
+
+type DetailVote = {
+  id: string;
+  title: string;
+  description?: string;
+  status: string;
+  start_date?: string;
+  end_date?: string;
+  created_at: string;
+  building?: Building;
+  vote_questions?: VoteQuestion[];
+  manual_vote_attachments: Attachment[];
+};
+
+import { VOTE_FIELDS_BASIC } from '../../graphql/fragments';
+
+// Základní GraphQL dotaz pro detail hlasování
 const GET_VOTE_DETAILS_QUERY = gql`
   query GetVoteDetailsForView($voteId: uuid!) {
-    vote: votes_by_pk(id: $voteId) {
-      ...VoteDetailFields
+    votes_by_pk(id: $voteId) {
+      ...VoteFieldsBasic
+      vote_questions {
+        question {
+          id
+          text
+          type
+        }
+      }
+      manual_vote_attachments {
+        id
+        attachment_name
+        created_at
+        member {
+          name
+          unit
+        }
+      }
     }
   }
-  ${VOTE_DETAIL_FIELDS}
+  ${VOTE_FIELDS_BASIC}
 `;
 
 interface VoteDetailViewProps {
   voteId: string;
   onBack: () => void;
-  onEdit: (vote: Vote) => void;
+  onEdit: (vote: DetailVote) => void;
 }
 
 export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
@@ -35,7 +85,7 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState('info');
 
-  const { data, loading, error } = useQuery(GET_VOTE_DETAILS_QUERY, {
+  const { data, loading, error } = useQuery<{ votes_by_pk: DetailVote }>(GET_VOTE_DETAILS_QUERY, {
     variables: { voteId },
   });
 
@@ -48,22 +98,43 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
     return <FullPageSpinner message="Načítám detail hlasování..." />;
   }
   if (error) {
-    return <div>Chyba při načítání dat: {error.message}</div>;
+    console.error('GraphQL error:', error);
+    
+    // Uživatelsky přívětivá zpráva
+    const userMessage = error.message.includes('unexpected subselection')
+      ? 'Omlouváme se, nastala chyba při načítání detailů hlasování. Náš tým byl informován.'
+      : 'Chyba při načítání dat. Zkuste to prosím později.';
+
+    return (
+      <Card className="p-6 border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
+        <h3 className="text-lg font-medium text-red-700 dark:text-red-300 mb-2">
+          Chyba při načítání
+        </h3>
+        <p className="text-red-600 dark:text-red-400">
+          {userMessage}
+        </p>
+        {import.meta.env.DEV && (
+          <pre className="mt-4 p-2 bg-red-100 dark:bg-red-900/40 rounded text-sm overflow-auto">
+            {error.message}
+          </pre>
+        )}
+      </Card>
+    );
   }
 
-  const vote: Vote | null = data?.vote;
+  const vote = data?.votes_by_pk;
 
   if (!vote) {
     return <div>Hlasování nebylo nalezeno.</div>;
   }
   
-  // Dočasné přemapování dat pro staré komponenty, které budeme dále upravovat
+  // Přemapování dat pro kompatibilitu
   const legacyVote = {
     ...vote,
-    buildingId: vote.building_id,
+    buildingId: vote.building?.id,
     createdAt: vote.created_at,
     startDate: vote.start_date,
-    memberVotes: {}, 
+    memberVotes: {},
   };
 
   type TabId = 'info' | 'members' | 'observers' | 'progress' | 'results';
@@ -152,16 +223,21 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
 
             <Card className="p-6">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-                Hlasovací otázky ({vote.questions.length})
+                Hlasovací otázky
               </h3>
               <div className="space-y-4">
-                {vote.questions.map((question: Question, index: number) => (
+                {data?.votes_by_pk?.vote_questions?.map(({ question }, index) => (
                   <div key={question.id} className="border-l-4 border-blue-500 pl-4">
                     <h4 className="font-medium text-gray-900 dark:text-gray-100">
                       {index + 1}. {question.text}
                     </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Typ: {question.type}
+                    </p>
                   </div>
-                ))}
+                )) || (
+                  <p className="text-gray-500">Žádné otázky nejsou k dispozici</p>
+                )}
               </div>
             </Card>
           </div>
