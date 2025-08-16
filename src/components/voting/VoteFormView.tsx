@@ -9,10 +9,9 @@ import { useMutation, useQuery } from '@apollo/client';
 import { 
   ADD_VOTE, 
   UPDATE_VOTE, 
-  type Vote, 
-  type Question,
   type VoteInput 
 } from '../../graphql/votes';
+import type { Vote } from '../../types';
 import { 
   GET_EMAIL_TEMPLATES,
   type EmailTemplate 
@@ -57,16 +56,18 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [votingDays, setVotingDays] = useState(30);
-  interface LocalQuestionForm extends Omit<Question, '__typename'> {
-    quorumType?: 'simple' | 'qualified' | 'unanimous' | 'custom';
-    customQuorum?: { numerator: number; denominator: number };
+  interface FormQuestion {
+    id: string;
+    text: string;
+    quorum_type: 'simple' | 'qualified' | 'unanimous' | 'custom';
+    custom_quorum_numerator?: number;
+    custom_quorum_denominator?: number;
   }
-  const [questions, setQuestions] = useState<LocalQuestionForm[]>([]);
+  const [questions, setQuestions] = useState<FormQuestion[]>([]);
   const [attachments, setAttachments] = useState<string[]>([]);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [activeInput, setActiveInput] = useState<'title' | 'description' | null>(null);
-  const [observers, setObservers] = useState<string[]>([]);
   // Vyhledávání v seznamu proměnných v pravém panelu
   const [varSearch, setVarSearch] = useState('');
 
@@ -83,7 +84,7 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
   useEffect(() => {
     if (vote) {
       setTitle(vote.title);
-      setDescription(vote.description);
+  setDescription(vote.description || '');
       setStatus(vote.status as 'draft' | 'active');
       setStartDate(vote.start_date ? new Date(vote.start_date).toISOString().slice(0, 16) : '');
       setEndDate(vote.end_date ? new Date(vote.end_date).toISOString().slice(0, 16) : '');
@@ -95,16 +96,11 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         setVotingDays(diffDays);
       }
-      setQuestions(vote.questions);
+  setQuestions(vote.questions as unknown as FormQuestion[]);
       // setAttachments(vote.attachments || []);
-      setObservers(vote.observers || []);
     } else {
       // Initialize with one empty question
-      setQuestions([{
-        id: generateUUID(),
-        text: '',
-        quorumType: 'simple'
-      }]);
+  setQuestions([{ id: generateUUID(), text: '', quorum_type: 'simple' }]);
     }
   }, [vote]);
 
@@ -135,21 +131,11 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
   };
 
   const addQuestion = () => {
-    setQuestions([...questions, {
-      id: generateUUID(),
-      text: '',
-      quorumType: 'simple'
-    }]);
+  setQuestions([...questions, { id: generateUUID(), text: '', quorum_type: 'simple' }]);
   };
 
-  const updateQuestion = (
-    index: number,
-    field: keyof Omit<Question, '__typename'>,
-    value: string | number | Question['customQuorum']
-  ) => {
-    const newQuestions = [...questions];
-    newQuestions[index] = { ...newQuestions[index], [field]: value };
-    setQuestions(newQuestions);
+  const updateQuestion = (index: number, partial: Partial<FormQuestion>) => {
+    setQuestions(qs => qs.map((q,i) => i===index ? { ...q, ...partial } : q));
   };
 
   const removeQuestion = (index: number) => {
@@ -193,31 +179,32 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
       return;
     }
 
-    const questionInserts = questions
-      .filter(q => q.text.trim())
-      .map(q => ({
-        text: q.text.trim(),
-        quorum_type: q.quorumType || 'simple',
-        custom_quorum_numerator: q.customQuorum?.numerator,
-        custom_quorum_denominator: q.customQuorum?.denominator
-      }));
+    const questionInserts = questions.filter(q=>q.text.trim()).map(q=>({
+      text: q.text.trim(),
+      quorum_type: q.quorum_type,
+      custom_quorum_numerator: q.custom_quorum_numerator,
+      custom_quorum_denominator: q.custom_quorum_denominator
+    }));
 
     const voteData: VoteInput = {
       building_id: buildingId,
       title: title.trim(),
       description: description.trim(),
       status: 'draft',
-      questions: questionInserts.length ? { data: questionInserts } : undefined,
       start_date: startDate ? new Date(startDate).toISOString() : undefined,
       end_date: endDate ? new Date(endDate).toISOString() : undefined,
-      observers: observers.length > 0 ? observers : undefined
+      // Poznámka: observers pole dočasně vypnuto pokud schéma nepodporuje update polem _set (řízeno jinými mutacemi)
+      // observers: observers.length > 0 ? observers : undefined
     };
+
+    // Pouze při vytváření posíláme nové otázky (nested insert); při update Hasura by vyžadovala separátní logiku
+    if (!vote && questionInserts.length) {
+      voteData.questions = { data: questionInserts };
+    }
 
     try {
       if (vote) {
-        await updateVoteMutation({
-          variables: { id: vote.id, vote: voteData }
-        });
+  await updateVoteMutation({ variables: { id: vote.id, vote: voteData } });
         showToast('Hlasování bylo aktualizováno', 'success');
       } else {
         await addVoteMutation({
@@ -556,18 +543,18 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
                         <Input
                           placeholder="Text otázky"
                           value={question.text}
-                          onChange={(e) => updateQuestion(index, 'text', e.target.value)}
+                          onChange={(e) => updateQuestion(index, { text: e.target.value })}
                           required
                         />
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                               Typ kvóra
                             </label>
                             <select
-                              value={question.quorumType}
-                              onChange={(e) => updateQuestion(index, 'quorumType', e.target.value)}
+          value={question.quorum_type}
+          onChange={(e) => updateQuestion(index, { quorum_type: e.target.value as FormQuestion['quorum_type'] })}
                               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               aria-label="Typ kvóra"
                             >
@@ -577,29 +564,20 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
                               <option value="custom">Vlastní</option>
                             </select>
                           </div>
-                          
-                          {question.quorumType === 'custom' && (
+          {question.quorum_type === 'custom' && (
                             <div className="flex space-x-2">
                               <Input
                                 type="number"
                                 placeholder="Čitatel"
-                                value={question.customQuorum?.numerator || ''}
-                                onChange={(e) => {
-                                  const num = parseInt(e.target.value) || 1;
-                                  const current = question.customQuorum || { numerator: 1, denominator: 2 };
-                                  updateQuestion(index, 'customQuorum', { numerator: num, denominator: current.denominator });
-                                }}
+            value={question.custom_quorum_numerator ?? ''}
+            onChange={(e)=> updateQuestion(index,{ custom_quorum_numerator: parseInt(e.target.value)||1 })}
                                 min="1"
                               />
                               <Input
                                 type="number"
                                 placeholder="Jmenovatel"
-                                value={question.customQuorum?.denominator || ''}
-                                onChange={(e) => {
-                                  const den = parseInt(e.target.value) || 2;
-                                  const current = question.customQuorum || { numerator: 1, denominator: 2 };
-                                  updateQuestion(index, 'customQuorum', { numerator: current.numerator, denominator: den });
-                                }}
+            value={question.custom_quorum_denominator ?? ''}
+            onChange={(e)=> updateQuestion(index,{ custom_quorum_denominator: parseInt(e.target.value)||2 })}
                                 min="1"
                               />
                             </div>

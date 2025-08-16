@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Mail, Trash2, Eye } from 'lucide-react';
+import { Plus, Mail, Trash2, Eye, Link as LinkIcon, ExternalLink } from 'lucide-react';
 import { useMutation, useQuery } from '@apollo/client';
 import { Vote, Observer } from '../../types';
 import { useToast } from '../../contexts/ToastContext';
@@ -36,6 +36,10 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
   const buildingObservers: Observer[] = observersData?.observers || [];
   const voteObservers = buildingObservers.filter(o => voteObserverEmails.includes(o.email));
   const availableObservers = buildingObservers.filter(o => !voteObserverEmails.includes(o.email));
+
+  // URL pro sledování (zatím jednoduchá – lze upravit na veřejný route /observe/:voteId?token=... )
+  const baseUrl = window.location.origin;
+  const observerWatchUrl = `${baseUrl}/vote/${vote.id}?mode=observer`;
 
   const [createObserver] = useMutation(CREATE_OBSERVER);
   const [addObserverToVote] = useMutation(ADD_OBSERVER_TO_VOTE, {
@@ -157,6 +161,15 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
         <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-4">
           Přiřazení pozorovatelé ({voteObservers.length})
         </h4>
+        <div className="mb-4 p-3 rounded-md bg-blue-50 dark:bg-blue-900/20 text-xs text-blue-700 dark:text-blue-300 flex items-center justify-between gap-2">
+          <div className="flex-1 break-all">
+            <span className="font-medium inline-flex items-center gap-1"><LinkIcon className="w-3 h-3" />Odkaz pro sledování:</span> {observerWatchUrl}
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <Button size="sm" variant="secondary" onClick={() => { navigator.clipboard.writeText(observerWatchUrl); showToast('Odkaz zkopírován','success'); }}>Kopírovat</Button>
+            <Button size="sm" variant="ghost" onClick={() => window.open(observerWatchUrl, '_blank')} title="Otevřít v nové záložce" aria-label="Otevřít odkaz"><ExternalLink className="w-3 h-3" /></Button>
+          </div>
+        </div>
         
         {voteObservers.length === 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -184,6 +197,15 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
                     aria-label="Znovu poslat pozvánku"
                   >
                     <Mail className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => { navigator.clipboard.writeText(observerWatchUrl); showToast('Odkaz zkopírován','success'); }}
+                    title="Kopírovat odkaz pro sledování"
+                    aria-label="Kopírovat odkaz"
+                  >
+                    <LinkIcon className="w-4 h-4" />
                   </Button>
                   <Button
                     size="sm"

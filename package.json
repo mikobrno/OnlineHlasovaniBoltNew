@@ -11,8 +11,11 @@
     "start": "vite preview --port 3000 --strictPort",
     "migrate": "node migrateData.js",
     "seed:email-templates": "echo Spustte obsah souboru database/seeds/insert_email_templates.sql v Supabase SQL editoru",
-  "dev:netlify": "netlify dev",
-  "dev:email-func": "node scripts/emailFunctionDevServer.js"
+    "dev:netlify": "netlify dev",
+    "dev:email-func": "node scripts/emailFunctionDevServer.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@apollo/client": "^3.9.5",
@@ -46,6 +49,8 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
-    "vite": "^5.4.2"
+    "vite": "^5.4.2",
+    "vitest": "^2.0.5",
+    "@vitest/coverage-v8": "^2.0.5"
   }
 }

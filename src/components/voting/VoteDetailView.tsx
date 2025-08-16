@@ -6,12 +6,8 @@ import { useQuery, gql } from '@apollo/client';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
 import { getVoteStatusText, getVoteStatusColor } from '../../lib/utils';
-import { VotingProgressView } from './VotingProgressView';
-import { ResultsView } from './ResultsView';
-import { MemberManagementView } from './MemberManagementView';
-import { ObserversView } from './ObserversView';
-import FullPageSpinner from '../FullPageSpinner';
-import type { Vote, Question } from '../../types';
+import { FullPageSpinner } from '../FullPageSpinner';
+import type { Vote, Question } from '../../types'; // Importujeme z nového centrálního typu
 
 // Komplexní GraphQL dotaz, který načte VŠE potřebné pro detail hlasování
 const GET_VOTE_DETAILS_QUERY = gql`
@@ -24,6 +20,7 @@ const GET_VOTE_DETAILS_QUERY = gql`
       created_at
       start_date
       end_date
+      attachments
       observers
       building_id
       questions(order_by: { order_index: asc }) {
@@ -54,12 +51,14 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
     variables: { voteId },
   });
 
-  // TODO: Přidat mutaci pro spuštění hlasování
+  // TODO: Implementovat mutaci pro spuštění hlasování
   const handleStartVote = () => {
     alert('Funkce pro spuštění hlasování bude brzy implementována.');
   };
 
-  if (loading) return <FullPageSpinner />;
+  if (loading) {
+    return <FullPageSpinner message="Načítám detail hlasování..." />;
+  }
   if (error) {
     return <div>Chyba při načítání dat: {error.message}</div>;
   }
@@ -69,35 +68,40 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
   if (!vote) {
     return <div>Hlasování nebylo nalezeno.</div>;
   }
-
-  // Přemapování dat pro starší komponenty (dočasné)
-  const legacyVote: Vote & { buildingId?: string; createdAt?: string; startDate?: string; endDate?: string; memberVotes?: Record<string, Record<string, 'yes' | 'no' | 'abstain'>> } = {
+  
+  // Dočasné přemapování dat pro staré komponenty, které budeme dále upravovat
+  const legacyVote = {
     ...vote,
     buildingId: vote.building_id,
     createdAt: vote.created_at,
     startDate: vote.start_date,
-    endDate: vote.end_date,
-    memberVotes: {}, // Tyto data se budou muset načítat zvlášť
+    memberVotes: {}, 
   };
 
-  const tabs = [
+  type TabId = 'info' | 'members' | 'observers' | 'progress' | 'results';
+  interface TabDef { id: TabId; label: string; icon: React.ReactNode; }
+  const baseTabs: TabDef[] = [
     { id: 'info', label: 'Informace', icon: <FileText className="w-4 h-4" /> },
-    { id: 'members', label: 'Členové', icon: <Mail className="w-4 h-4" /> },
+    { id: 'members', label: 'Správa členů', icon: <Mail className="w-4 h-4" /> },
     { id: 'observers', label: 'Pozorovatelé', icon: <Eye className="w-4 h-4" /> },
-    ...(vote.status === 'active' ? [{ id: 'progress', label: 'Průběh', icon: <BarChart3 className="w-4 h-4" /> }] : []),
-    ...(vote.status === 'completed' ? [{ id: 'results', label: 'Výsledky', icon: <BarChart3 className="w-4 h-4" /> }] : [])
+  ];
+  const tabs: TabDef[] = [
+    ...baseTabs,
+    ...(vote.status === 'active' ? [{ id: 'progress', label: 'Průběh', icon: <BarChart3 className="w-4 h-4" /> } as TabDef] : []),
+    ...(vote.status === 'completed' ? [{ id: 'results', label: 'Výsledky', icon: <BarChart3 className="w-4 h-4" /> } as TabDef] : [])
   ];
 
   const renderTabContent = () => {
     switch (activeTab) {
+      // Zde budou později komponenty pro záložky, zatím zobrazíme informaci
       case 'members':
-        return <MemberManagementView vote={legacyVote} members={[]} />;
+        return <Card className="p-6"><p>Záložka "Správa členů" bude brzy funkční.</p></Card>;
       case 'observers':
-        return <ObserversView vote={legacyVote} buildingId={legacyVote.building_id} />;
+        return <Card className="p-6"><p>Záložka "Pozorovatelé" bude brzy funkční.</p></Card>;
       case 'progress':
-        return vote.status === 'active' ? <VotingProgressView vote={legacyVote} members={[]} /> : null;
+        return <Card className="p-6"><p>Záložka "Průběh" bude brzy funkční.</p></Card>;
       case 'results':
-        return vote.status === 'completed' ? <ResultsView vote={legacyVote} members={[]} /> : null;
+        return <Card className="p-6"><p>Záložka "Výsledky" bude brzy funkční.</p></Card>;
       default:
         return (
           <div className="space-y-6">
@@ -124,8 +128,7 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
                   </Button>
                 </div>
               </div>
-
-              <div className="prose dark:prose-invert max-w-none mb-6">
+              <div className="prose dark:prose-invert max-w-none">
                 <p className="text-gray-600 dark:text-gray-400 whitespace-pre-wrap">
                   {vote.description}
                 </p>

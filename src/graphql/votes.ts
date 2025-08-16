@@ -64,7 +64,14 @@ export const ADD_VOTE = gql`
 export const UPDATE_VOTE = gql`
   mutation UpdateVote($id: uuid!, $vote: votes_set_input!) {
     update_votes_by_pk(pk_columns: { id: $id }, _set: $vote) {
-      id
+  id
+  title
+  description
+  status
+  start_date
+  end_date
+  building_id
+  questions { id text quorum_type custom_quorum_numerator custom_quorum_denominator }
     }
   }
 `;
