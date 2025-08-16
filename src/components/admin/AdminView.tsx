@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Building, Settings, Globe, Database, TestTube, FileText } from 'lucide-react';
+import { Building, Settings, Globe, Database, TestTube, FileText, MessageSquare } from 'lucide-react';
 import { Card } from '../common/Card';
 import { BuildingManager } from './BuildingManager';
 import { TemplatesView } from './TemplatesView';
@@ -7,32 +7,35 @@ import { GlobalVariablesManager } from './GlobalVariablesManager';
 import { BuildingVariablesManager } from './BuildingVariablesManager';
 import { SettingsView } from './SettingsView';
 import { EmailTestPanel } from './EmailTestPanel';
+import { SMSTestView } from '../sms/SMSTestView';
 
 interface AdminViewProps {
   buildingId: string;
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({ buildingId }) => {
-  const [activeSection, setActiveSection] = useState<'buildings' | 'templates' | 'email-test' | 'global-variables' | 'building-variables' | 'settings'>('buildings');
+  const [activeSection, setActiveSection] = useState<'buildings' | 'templates' | 'email-test' | 'sms-test' | 'global-variables' | 'building-variables' | 'settings'>('buildings');
 
   // Komponenty, které nepotřebují buildingId
   const globalComponents = {
     'buildings': BuildingManager,
     'global-variables': GlobalVariablesManager,
     'settings': SettingsView,
-    'email-test': EmailTestPanel,
-    'building-variables': BuildingVariablesManager,
+  'email-test': EmailTestPanel,
+  'sms-test': SMSTestView,
   };
 
   // Komponenty, které potřebují buildingId
   const buildingSpecificComponents = {
     'templates': TemplatesView,
+    'building-variables': BuildingVariablesManager,
   };
 
   const sections = [
     { id: 'buildings' as const, label: 'Budovy', icon: <Building className="w-5 h-5" /> },
     { id: 'templates' as const, label: 'Šablony', icon: <FileText className="w-5 h-5" /> },
-    { id: 'email-test' as const, label: 'Test Email Systému', icon: <TestTube className="w-5 h-5" /> },
+  { id: 'email-test' as const, label: 'Test Email Systému', icon: <TestTube className="w-5 h-5" /> },
+  { id: 'sms-test' as const, label: 'Test SMS Systému', icon: <MessageSquare className="w-5 h-5" /> },
     { id: 'global-variables' as const, label: 'Globální proměnné', icon: <Globe className="w-5 h-5" /> },
     { id: 'building-variables' as const, label: 'Proměnné budov', icon: <Database className="w-5 h-5" /> },
     { id: 'settings' as const, label: 'Nastavení', icon: <Settings className="w-5 h-5" /> }

@@ -5,15 +5,17 @@ export const GET_SETTINGS = gql`
     settings {
       key
       value
+      updated_at
     }
   }
 `;
 
-// Náhradní řešení pro případ, že tabulka settings neexistuje
-export const GET_DEFAULT_SETTINGS = gql`
-  query GetDefaultSettings {
-    app_settings {
-      id
+export const CREATE_SETTINGS = gql`
+  mutation CreateSettings($key: String!, $value: jsonb!) {
+    insert_settings_one(object: { key: $key, value: $value, updated_at: "now()" }) {
+      key
+      value
+      updated_at
     }
   }
 `;
@@ -23,6 +25,7 @@ export const UPDATE_SETTINGS = gql`
     update_settings_by_pk(pk_columns: { key: $key }, _set: { value: $value, updated_at: "now()" }) {
       key
       value
+      updated_at
     }
   }
 `;

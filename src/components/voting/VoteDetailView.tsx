@@ -1,126 +1,103 @@
+// src/components/voting/VoteDetailView.tsx
+
 import React, { useState } from 'react';
-import { ArrowLeft, Edit, Mail, FileText, BarChart3, Eye, Play, FileDown } from 'lucide-react';
-import { useMutation, useQuery } from '@apollo/client';
-import { useToast } from '../../contexts/ToastContext';
+import { ArrowLeft, Edit, Play, FileText, Mail, Eye, BarChart3 } from 'lucide-react';
+import { useQuery, gql } from '@apollo/client';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
-import { formatDate, getVoteStatusText, getVoteStatusColor } from '../../lib/utils';
+import { getVoteStatusText, getVoteStatusColor } from '../../lib/utils';
 import { VotingProgressView } from './VotingProgressView';
 import { ResultsView } from './ResultsView';
 import { MemberManagementView } from './MemberManagementView';
 import { ObserversView } from './ObserversView';
-import { BallotTemplateModal } from './BallotTemplateModal';
-import { GET_VOTE_DETAILS } from '../../graphql/queries';
-import { START_VOTE } from '../../graphql/mutations';
-import { Vote, Member } from '../../types';
+import FullPageSpinner from '../FullPageSpinner';
+import type { Vote, Question } from '../../types';
+
+// Komplexní GraphQL dotaz, který načte VŠE potřebné pro detail hlasování
+const GET_VOTE_DETAILS_QUERY = gql`
+  query GetVoteDetails($voteId: uuid!) {
+    vote: votes_by_pk(id: $voteId) {
+      id
+      title
+      description
+      status
+      created_at
+      start_date
+      end_date
+      observers
+      building_id
+      questions(order_by: { order_index: asc }) {
+        id
+        text
+        quorum_type
+        custom_quorum_numerator
+        custom_quorum_denominator
+      }
+    }
+  }
+`;
 
 interface VoteDetailViewProps {
   voteId: string;
-  buildingId: string;
   onBack: () => void;
   onEdit: (vote: Vote) => void;
 }
 
 export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
   voteId,
-  buildingId,
   onBack,
-  onEdit
+  onEdit,
 }) => {
-  const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'info' | 'members' | 'observers' | 'progress' | 'results' | 'attachments'>('info');
-  // attachments odstraněny (zatím neimplementováno v DB)
-  const [showBallotModal, setShowBallotModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('info');
 
-  const { data, loading, error } = useQuery(GET_VOTE_DETAILS, {
-    variables: { voteId, buildingId },
+  const { data, loading, error } = useQuery(GET_VOTE_DETAILS_QUERY, {
+    variables: { voteId },
   });
 
-  const [startVoteMutation] = useMutation(START_VOTE, {
-    variables: { id: voteId },
-    refetchQueries: [
-      { query: GET_VOTE_DETAILS, variables: { voteId, buildingId } }
-    ],
-    onCompleted: () => {
-      showToast('Hlasování bylo úspěšně spuštěno', 'success');
-    },
-    onError: (error) => {
-      showToast(`Chyba při spuštění hlasování: ${error.message}`, 'error');
-    }
-  });
-
-  if (loading) return <p>Načítání detailu hlasování...</p>;
-  if (error) return <p>Chyba: {error.message}</p>;
-
-  // Transformace custom_quorum numer/denom na objekt kvůli staršímu typu Vote
-  type RawQuestion = {
-    id: string;
-    text: string;
-    description?: string;
-    quorum_type?: string;
-    custom_quorum_numerator?: number | null;
-    custom_quorum_denominator?: number | null;
-  };
-  const vote: Vote | undefined = data?.votes_by_pk ? {
-    ...data.votes_by_pk,
-    questions: (data.votes_by_pk.questions as RawQuestion[]).map((q) => ({
-      id: q.id,
-      text: q.text,
-      description: q.description,
-  quorum_type: (q.quorum_type as 'simple' | 'qualified' | 'unanimous' | 'custom' | undefined),
-      custom_quorum: (q.custom_quorum_numerator && q.custom_quorum_denominator)
-        ? { numerator: q.custom_quorum_numerator, denominator: q.custom_quorum_denominator }
-        : undefined
-    }))
-    // Rekonstrukce staré struktury member_votes: answers { [questionId]: answer }
-  ,
-    member_votes: data.member_votes_rows ? Object.values(
-      (data.member_votes_rows as { member_id: string; question_id: string; answer: 'yes' | 'no' | 'abstain' | null }[]).reduce((acc, row) => {
-        if (!acc[row.member_id]) {
-          acc[row.member_id] = { member_id: row.member_id, answers: {} as Record<string, 'yes' | 'no' | 'abstain'> };
-        }
-        if (row.question_id && row.answer) {
-          acc[row.member_id].answers[row.question_id] = row.answer;
-        }
-        return acc;
-      }, {} as Record<string, { member_id: string; answers: Record<string, 'yes' | 'no' | 'abstain'> }>)
-  ) : [],
-  } : undefined;
-  const members: Member[] = data?.members || [];
-  // attachments nejsou podporovány v aktuálním schématu
-  
-  if (!vote) return <p>Hlasování nebylo nalezeno.</p>;
-
-  const votedMembersCount = vote.member_votes?.length || 0;
-  // attachments nejsou podporovány
-
-  const handleStartVote = async () => {
-    if (window.confirm('Opravdu chcete spustit hlasování? Tato akce je nevratná.')) {
-      await startVoteMutation();
-    }
+  // TODO: Přidat mutaci pro spuštění hlasování
+  const handleStartVote = () => {
+    alert('Funkce pro spuštění hlasování bude brzy implementována.');
   };
 
-  // Funkce pro zobrazení příloh odstraněna
-  
+  if (loading) return <FullPageSpinner />;
+  if (error) {
+    return <div>Chyba při načítání dat: {error.message}</div>;
+  }
+
+  const vote: Vote | null = data?.vote;
+
+  if (!vote) {
+    return <div>Hlasování nebylo nalezeno.</div>;
+  }
+
+  // Přemapování dat pro starší komponenty (dočasné)
+  const legacyVote: Vote & { buildingId?: string; createdAt?: string; startDate?: string; endDate?: string; memberVotes?: Record<string, Record<string, 'yes' | 'no' | 'abstain'>> } = {
+    ...vote,
+    buildingId: vote.building_id,
+    createdAt: vote.created_at,
+    startDate: vote.start_date,
+    endDate: vote.end_date,
+    memberVotes: {}, // Tyto data se budou muset načítat zvlášť
+  };
+
   const tabs = [
     { id: 'info', label: 'Informace', icon: <FileText className="w-4 h-4" /> },
     { id: 'members', label: 'Členové', icon: <Mail className="w-4 h-4" /> },
     { id: 'observers', label: 'Pozorovatelé', icon: <Eye className="w-4 h-4" /> },
-  // attachments tab odstraněn
-  ...(vote.status === 'active' ? [{ id: 'progress', label: 'Průběh', icon: <BarChart3 className="w-4 h-4" /> }] : []),
-  ...(vote.status === 'completed' ? [{ id: 'results', label: 'Výsledky', icon: <BarChart3 className="w-4 h-4" /> }] : [])
+    ...(vote.status === 'active' ? [{ id: 'progress', label: 'Průběh', icon: <BarChart3 className="w-4 h-4" /> }] : []),
+    ...(vote.status === 'completed' ? [{ id: 'results', label: 'Výsledky', icon: <BarChart3 className="w-4 h-4" /> }] : [])
   ];
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'members':
-        return <MemberManagementView vote={vote} members={members} />;
+        return <MemberManagementView vote={legacyVote} members={[]} />;
       case 'observers':
-        return <ObserversView vote={vote} buildingId={buildingId} />;
+        return <ObserversView vote={legacyVote} buildingId={legacyVote.building_id} />;
       case 'progress':
-        return vote.status === 'active' ? <VotingProgressView vote={vote} members={members} /> : null;
+        return vote.status === 'active' ? <VotingProgressView vote={legacyVote} members={[]} /> : null;
       case 'results':
-        return vote.status === 'completed' ? <ResultsView vote={vote} members={members} /> : null;
+        return vote.status === 'completed' ? <ResultsView vote={legacyVote} members={[]} /> : null;
       default:
         return (
           <div className="space-y-6">
@@ -135,17 +112,13 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
                   </span>
                 </div>
                 <div className="flex space-x-2">
-                  <Button onClick={() => setShowBallotModal(true)} size="sm" title="Vytvořit / vytisknout hlasovací listinu">
-                    <FileDown className="w-4 h-4 mr-2" />
-                    Hlasovací listina
-                  </Button>
                   {vote.status === 'draft' && (
                     <Button onClick={handleStartVote} size="sm">
                       <Play className="w-4 h-4 mr-2" />
                       Spustit hlasování
                     </Button>
                   )}
-                  <Button onClick={() => onEdit(vote)} size="sm">
+                  <Button onClick={() => onEdit(legacyVote)} size="sm">
                     <Edit className="w-4 h-4 mr-2" />
                     Upravit
                   </Button>
@@ -157,61 +130,27 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
                   {vote.description}
                 </p>
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                    Časové údaje
-                  </h3>
-                  <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                    <div>Vytvořeno: {formatDate(vote.created_at)}</div>
-                    {vote.start_date && (
-                      <div>Začátek: {formatDate(vote.start_date)}</div>
-                    )}
-                    {vote.end_date && (
-                      <div>Konec: {formatDate(vote.end_date)}</div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                    Účast
-                  </h3>
-                  <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                    <div>Hlasovalo: {votedMembersCount} z {members.length} členů</div>
-                    <div>Účast: {members.length > 0 ? Math.round((votedMembersCount / members.length) * 100) : 0}%</div>
-                    {/* attachments info odstraněno */}
-                  </div>
-                </div>
-              </div>
             </Card>
 
             <Card className="p-6">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 Hlasovací otázky ({vote.questions.length})
               </h3>
-              <ul className="list-disc pl-6 space-y-2">
-                {vote.questions.map((question, index) => (
-                  <li key={question.id} className="text-sm text-gray-700 dark:text-gray-300">
-                    <span className="font-medium">{index + 1}. {question.text}</span>{' '}
-                    <span className="italic">
-                      ({question.quorum_type === 'simple' && '1/2'}
-                      {question.quorum_type === 'qualified' && '2/3'}
-                      {question.quorum_type === 'unanimous' && '100%'}
-                      {question.quorum_type === 'custom' && question.custom_quorum && `${question.custom_quorum.numerator}/${question.custom_quorum.denominator}`})
-                    </span>
-                  </li>
+              <div className="space-y-4">
+                {vote.questions.map((question: Question, index: number) => (
+                  <div key={question.id} className="border-l-4 border-blue-500 pl-4">
+                    <h4 className="font-medium text-gray-900 dark:text-gray-100">
+                      {index + 1}. {question.text}
+                    </h4>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </Card>
           </div>
         );
     }
   };
-
-  // attachments view odstraněn
-
+  
   return (
     <div>
       <div className="mb-6">
@@ -226,7 +165,7 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as 'info' | 'members' | 'observers' | 'progress' | 'results' | 'attachments')}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === tab.id
                   ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -235,15 +174,12 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
             >
               {tab.icon}
               <span>{tab.label}</span>
-              {/* attachments badge removed */}
             </button>
           ))}
         </nav>
       </div>
 
-  {renderTabContent()}
-
-  <BallotTemplateModal vote={vote} isOpen={showBallotModal} onClose={() => setShowBallotModal(false)} />
+      {renderTabContent()}
     </div>
   );
 };

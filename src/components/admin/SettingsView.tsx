@@ -1,523 +1,265 @@
-import { useState, useEffect } from 'react';
-import { Save, RotateCcw, Globe, Shield, Database, Bell, Palette, Send, TestTube, CreditCard, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Save, RotateCcw, Globe, AlertCircle, PlusCircle } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
-import { useQuery, useMutation, useLazyQuery } from '@apollo/client';
-import { GET_SETTINGS, UPDATE_SETTINGS, GET_DEFAULT_SETTINGS } from '../../graphql/settings';
-import { SEND_TEST_SMS_MUTATION, GET_SMS_CREDIT_QUERY, TEST_SMS_CONNECTION_QUERY } from '../../graphql/sms';
+// Apollo hooky (Nhost poskytuje klienta, ale hooky bereme z @apollo/client)
+import { useQuery, useMutation } from '@apollo/client';
+import { GET_GLOBAL_VARIABLES_QUERY, UPDATE_GLOBAL_VARIABLES_MUTATION } from '../../graphql/globalVariables';
+import type { GlobalVariable } from '../../graphql/globalVariables';
 
-// Definice typů pro jednotlivé sekce nastavení
-interface GeneralSettings {
-  appName: string;
-  appDescription: string;
-  defaultLanguage: string;
-  timezone: string;
-}
+// Klíče proměnných, které budeme mapovat do uživatelského rozhraní
+// Pokud je třeba přidat další, stačí doplnit do pole nebo pracovat dynamicky
+// Níže zvolíme jen část, kterou chceme zobrazit – zbytek proměnných se zobrazí v sekci "Ostatní".
+const KNOWN_VARIABLE_ORDER = [
+  'app_name',
+  'app_description',
+  'default_language',
+  'timezone',
+  'sms_provider',
+  'sms_username',
+  'sms_password',
+  'session_timeout',
+  'max_login_attempts',
+  'password_min_length',
+  'require_two_factor',
+  'email_notifications',
+  'sms_notifications',
+  'browser_notifications',
+  'default_theme',
+  'primary_color',
+  'logo_url',
+  'podpis_spravce',
+  'pravni_upozorneni'
+] as const;
 
-interface SmsSettings {
-  provider: string;
-  username: string;
-  password?: string; // Heslo je citlivý údaj, nemusí být vždy posíláno
-}
-
-interface SecuritySettings {
-  sessionTimeout: number;
-  maxLoginAttempts: number;
-  passwordMinLength: number;
-  requireTwoFactor: boolean;
-}
-
-interface NotificationSettings {
-  emailNotifications: boolean;
-  smsNotifications: boolean;
-  browserNotifications: boolean;
-}
-
-interface AppearanceSettings {
-  defaultTheme: 'light' | 'dark' | 'system';
-  primaryColor: string;
-  logoUrl: string;
-}
-
-// Hlavní typ pro všechna nastavení
-type AppSettings = {
-  general: GeneralSettings;
-  sms: SmsSettings;
-  security: SecuritySettings;
-  notifications: NotificationSettings;
-  appearance: AppearanceSettings;
-};
-
-const initialSettings: AppSettings = {
-    general: { appName: '', appDescription: '', defaultLanguage: 'cs', timezone: 'Europe/Prague' },
-    sms: { provider: 'smsbrana', username: '', password: '' },
-    security: { sessionTimeout: 30, maxLoginAttempts: 5, passwordMinLength: 8, requireTwoFactor: false },
-    notifications: { emailNotifications: true, smsNotifications: true, browserNotifications: false },
-    appearance: { defaultTheme: 'system', primaryColor: '#3b82f6', logoUrl: '' },
-};
+type VariableEditState = Record<string, string>;
 
 export const SettingsView = () => {
   const { showToast } = useToast();
-  const [settings, setSettings] = useState<AppSettings>(initialSettings);
-  const [originalSettings, setOriginalSettings] = useState<AppSettings>(initialSettings);
-  const [activeSection, setActiveSection] = useState<keyof AppSettings | 'database'>('general');
-  
-  // SMS test state
-  const [testPhone, setTestPhone] = useState('');
-  const [testMessage, setTestMessage] = useState('Testovací SMS z OnlineSpráva aplikace. SMS služba funguje správně!');
+  const [activeSection, setActiveSection] = useState<'general' | 'security' | 'notifications' | 'appearance' | 'advanced'>('general');
+  const [edited, setEdited] = useState<VariableEditState>({});
+  // Stav pro přidání nové proměnné v sekci "Ostatní"
+  const [newVarName, setNewVarName] = useState('');
+  const [newVarValue, setNewVarValue] = useState('');
+  const [newVarDescription, setNewVarDescription] = useState('');
+  const [initialLoaded, setInitialLoaded] = useState(false);
 
-  const { loading: loadingSettings, error: settingsError } = useQuery(GET_SETTINGS, {
-    onCompleted: (data) => {
-      if (data && data.settings && data.settings.length > 0) {
-        try {
-          const fetchedSettingsAsObject = data.settings.reduce((obj: Record<string, unknown>, item: { key: string; value: unknown }) => {
-              obj[item.key] = item.value;
-              return obj;
-          }, {});
-          
-          const newSettings: AppSettings = {
-              general: { ...initialSettings.general, ...(fetchedSettingsAsObject.general as Partial<GeneralSettings> || {}) },
-              sms: { ...initialSettings.sms, ...(fetchedSettingsAsObject.sms as Partial<SmsSettings> || {}) },
-              security: { ...initialSettings.security, ...(fetchedSettingsAsObject.security as Partial<SecuritySettings> || {}) },
-              notifications: { ...initialSettings.notifications, ...(fetchedSettingsAsObject.notifications as Partial<NotificationSettings> || {}) },
-              appearance: { ...initialSettings.appearance, ...(fetchedSettingsAsObject.appearance as Partial<AppearanceSettings> || {}) },
-          };
+  // Načtení všech globálních proměnných
+  const { data, loading, error, refetch } = useQuery<{ global_variables: GlobalVariable[] }>(GET_GLOBAL_VARIABLES_QUERY, { fetchPolicy: 'network-only' });
+  const globalVariables = useMemo<GlobalVariable[]>(() => data?.global_variables ?? [], [data]);
 
-          if (!newSettings.sms.password) {
-              newSettings.sms.password = '';
-          }
+  // Lookup map
+  const globalMap = useMemo(() => {
+    const m: Record<string, GlobalVariable> = {};
+    globalVariables.forEach((v: GlobalVariable) => { m[v.name] = v; });
+    return m;
+  }, [globalVariables]);
 
-          setSettings(newSettings);
-          const deepClonedSettings = JSON.parse(JSON.stringify(newSettings));
-          if (deepClonedSettings.sms.password) {
-              deepClonedSettings.sms.password = '';
-          }
-          setOriginalSettings(deepClonedSettings);
-        } catch (err) {
-          console.error("Chyba při zpracování nastavení:", err);
-          showToast("Nepodařilo se zpracovat nastavení. Používám výchozí hodnoty.", "warning");
-          setSettings(initialSettings);
-          setOriginalSettings(JSON.parse(JSON.stringify(initialSettings)));
-        }
-      } else {
-        // Pokud nejsou žádná nastavení, použijeme výchozí
-        console.log("Nebyla nalezena žádná nastavení, používám výchozí hodnoty");
-        setSettings(initialSettings);
-        setOriginalSettings(JSON.parse(JSON.stringify(initialSettings)));
-      }
-    },
-    onError: (error) => {
-        console.error("Chyba při načítání nastavení:", error);
-        showToast(`Chyba při načítání nastavení: ${error.message}`, 'error');
-        // I v případě chyby použijeme výchozí nastavení
-        setSettings(initialSettings);
-        setOriginalSettings(JSON.parse(JSON.stringify(initialSettings)));
-    },
-    fetchPolicy: 'network-only' // Vždy načteme aktuální data
-  });
-
-  const [updateSettingsMutation, { loading: isSaving }] = useMutation(UPDATE_SETTINGS);
-  
-  const [sendTestSms, { loading: isSendingSms }] = useMutation(SEND_TEST_SMS_MUTATION, {
-    onCompleted: (data) => {
-        const result = data.sendTestSms;
-        showToast(result.message, result.success ? 'success' : 'error');
-    },
-    onError: (error) => showToast(`Chyba: ${error.message}`, 'error')
-  });
-
-  const [getSmsCredit, { loading: isLoadingCredit }] = useLazyQuery(GET_SMS_CREDIT_QUERY, {
-      onCompleted: (data) => {
-          const result = data.getSmsCredit;
-          showToast(result.message, result.success ? 'success' : 'error');
-      },
-      onError: (error) => showToast(`Chyba: ${error.message}`, 'error')
-  });
-
-  const [testSmsConnection, { loading: isTestingConnection }] = useLazyQuery(TEST_SMS_CONNECTION_QUERY, {
-      onCompleted: (data) => {
-          const result = data.testSmsConnection;
-          showToast(result.message, result.success ? 'success' : 'error');
-      },
-      onError: (error) => showToast(`Chyba: ${error.message}`, 'error')
-  });
-
-
-  const handleSettingChange = <T extends keyof AppSettings, K extends keyof AppSettings[T]>(
-    section: T,
-    key: K,
-    value: AppSettings[T][K]
-  ) => {
-    setSettings(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        [key]: value,
-      },
-    }));
-  };
-
-  const handleSave = async (section: keyof AppSettings) => {
-    const dataToSave = { ...settings[section] };
-    
-    if (section === 'sms' && (dataToSave as SmsSettings).password === '') {
-        delete (dataToSave as SmsSettings).password;
+  // Inicializace lokálního edit stavu po prvním načtení
+  useEffect(() => {
+    if (!initialLoaded && globalVariables.length) {
+      const init: VariableEditState = {};
+      globalVariables.forEach((v: GlobalVariable) => { init[v.name] = v.value ?? ''; });
+      setEdited(init);
+      setInitialLoaded(true);
     }
+  }, [initialLoaded, globalVariables]);
 
-    try {
-      await updateSettingsMutation({ variables: { key: section, value: dataToSave } });
-      showToast('Nastavení bylo uloženo', 'success');
-      
-      const newSectionState = { ...settings[section] };
-      if (section === 'sms') {
-          (newSectionState as SmsSettings).password = '';
-      }
-      
-      const newOriginalSettings = { ...originalSettings, [section]: newSectionState };
-      setOriginalSettings(newOriginalSettings);
-
-    } catch (error) {
-      console.error('Chyba při ukládání nastavení:', error);
-      showToast('Nepodařilo se uložit nastavení', 'error');
-    }
-  };
-
-  const handleReset = (section: keyof AppSettings) => {
-    setSettings(prev => ({
-        ...prev,
-        [section]: originalSettings[section]
-    }));
-    showToast('Změny byly zrušeny', 'info');
-  };
-
-  const hasChanges = (section: keyof AppSettings) => {
-      if (!originalSettings[section]) return false;
-      return JSON.stringify(settings[section]) !== JSON.stringify(originalSettings[section]);
-  }
-
-  // SMS test functions
-  const handleTestSMS = () => {
-    if (!testPhone.trim()) {
-      showToast('Zadejte telefonní číslo', 'error');
-      return;
-    }
-    sendTestSms({ variables: { to: testPhone, message: testMessage } });
-  };
-
-  const handleTestConnection = () => testSmsConnection();
-  const handleGetCredit = () => getSmsCredit();
+  const [updateMany, { loading: saving }] = useMutation(UPDATE_GLOBAL_VARIABLES_MUTATION, {
+    refetchQueries: [{ query: GET_GLOBAL_VARIABLES_QUERY }],
+    awaitRefetchQueries: true,
+    onCompleted: () => showToast('Nastavení uloženo', 'success'),
+    onError: (e: unknown) => {
+      console.error(e);
+      showToast('Chyba při ukládání', 'error');
+    },
+  });
 
   const sections = [
     { id: 'general' as const, label: 'Obecné', icon: <Globe className="w-4 h-4" /> },
-    { id: 'sms' as const, label: 'SMS', icon: <div className="w-4 h-4 flex items-center justify-center text-xs">📱</div> },
-    { id: 'security' as const, label: 'Bezpečnost', icon: <Shield className="w-4 h-4" /> },
-    { id: 'notifications' as const, label: 'Notifikace', icon: <Bell className="w-4 h-4" /> },
-    { id: 'appearance' as const, label: 'Vzhled', icon: <Palette className="w-4 h-4" /> },
-    { id: 'database' as const, label: 'Databáze', icon: <Database className="w-4 h-4" /> }
+    { id: 'security' as const, label: 'Bezpečnost', icon: <div className="w-4 h-4 flex items-center justify-center text-xs">🔒</div> },
+    { id: 'notifications' as const, label: 'Notifikace', icon: <div className="w-4 h-4 flex items-center justify-center text-xs">🔔</div> },
+    { id: 'appearance' as const, label: 'Vzhled', icon: <div className="w-4 h-4 flex items-center justify-center text-xs">🎨</div> },
+    { id: 'advanced' as const, label: 'Ostatní', icon: <div className="w-4 h-4 flex items-center justify-center text-xs">⚙️</div> }
   ];
 
-  const renderSectionHeader = (title: string, sectionKey: keyof AppSettings) => (
-    <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-            {title}
-        </h3>
-        {hasChanges(sectionKey) && (
-            <div className="flex space-x-2">
-                <Button variant="secondary" onClick={() => handleReset(sectionKey)} size="sm" disabled={isSaving}>
-                    <RotateCcw className="w-4 h-4 mr-2" />
-                    Zrušit
-                </Button>
-                <Button onClick={() => handleSave(sectionKey)} size="sm" disabled={isSaving}>
-                    <Save className="w-4 h-4 mr-2" />
-                    {isSaving ? 'Ukládání...' : 'Uložit'}
-                </Button>
-            </div>
-        )}
+  const setValue = (name: string, value: string) => setEdited(prev => ({ ...prev, [name]: value }));
+
+  // Změny: zahrň i nové proměnné, které nejsou v globalMap
+  const changedVariables = useMemo(() => {
+    return Object.keys(edited).filter(name => {
+      const existing = globalMap[name];
+      if (!existing) return true; // nová ještě neuložená proměnná
+      return existing.value !== edited[name];
+    });
+  }, [edited, globalMap]);
+
+  const hasAnyChanges = changedVariables.length > 0;
+
+  const handleSaveAll = () => {
+    if (!hasAnyChanges) {
+      showToast('Žádné změny k uložení', 'info');
+      return;
+    }
+    const updates = changedVariables.map(name => {
+      const existing = globalMap[name];
+      const description = existing?.description || name.replace(/_/g, ' ');
+      // Vždy posíláme description kvůli NOT NULL constraintu a is_editable (true pro nové, zachová se u existujících)
+      return {
+        name,
+        value: edited[name],
+        description,
+        is_editable: existing?.is_editable ?? true
+      };
+    });
+    updateMany({ variables: { updates } });
+  };
+
+  const handleResetAll = () => {
+    const reset: VariableEditState = {};
+    Object.keys(globalMap).forEach(name => { reset[name] = globalMap[name].value ?? ''; });
+    setEdited(reset);
+    showToast('Změny zrušeny', 'info');
+  };
+
+  const renderToolbar = () => (
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-1">Nastavení aplikace</h1>
+        <p className="text-gray-600 dark:text-gray-400 text-sm">Konfigurace systému a globálních parametrů</p>
+      </div>
+      <div className="flex space-x-2">
+        <Button variant="secondary" size="sm" onClick={handleResetAll} disabled={saving || !hasAnyChanges}>
+          <RotateCcw className="w-4 h-4 mr-2" />Zrušit
+        </Button>
+        <Button size="sm" onClick={handleSaveAll} disabled={saving || !hasAnyChanges}>
+          <Save className="w-4 h-4 mr-2" />{saving ? 'Ukládám...' : 'Uložit'}
+        </Button>
+      </div>
     </div>
   );
 
-  const renderGeneralSettings = () => (
-    <Card className="p-6">
-      {renderSectionHeader('Obecné nastavení', 'general')}
-      <div className="space-y-4">
-        <Input
-          label="Název aplikace"
-          value={settings.general.appName}
-          onChange={(e) => handleSettingChange('general', 'appName', e.target.value)}
-        />
-        <div>
-          <label htmlFor="appDescription" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Popis aplikace
-          </label>
-          <textarea
-            id="appDescription"
-            value={settings.general.appDescription}
-            onChange={(e) => handleSettingChange('general', 'appDescription', e.target.value)}
-            rows={3}
-            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="defaultLanguage" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Výchozí jazyk
-            </label>
-            <select
-              id="defaultLanguage"
-              value={settings.general.defaultLanguage}
-              onChange={(e) => handleSettingChange('general', 'defaultLanguage', e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="cs">Čeština</option>
-              <option value="sk">Slovenština</option>
-              <option value="en">English</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Časové pásmo
-            </label>
-            <select
-              id="timezone"
-              value={settings.general.timezone}
-              onChange={(e) => handleSettingChange('general', 'timezone', e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="Europe/Prague">Europe/Prague</option>
-              <option value="Europe/Bratislava">Europe/Bratislava</option>
-              <option value="UTC">UTC</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
+  // (Odstraněno: stará hlavička pro global variables; sjednoceno do hlavního toolbaru)
 
-
-
-  const renderSMSSettings = () => (
-    <div className="space-y-6">
+  const renderGeneralSettings = () => {
+    const fields = [
+      { name: 'app_name', label: 'Název aplikace', type: 'text' },
+      { name: 'app_description', label: 'Popis aplikace', type: 'textarea' },
+      { name: 'default_language', label: 'Výchozí jazyk', type: 'select', options: [ ['cs','Čeština'], ['sk','Slovenština'], ['en','English'] ] },
+      { name: 'timezone', label: 'Časové pásmo', type: 'select', options: [ ['Europe/Prague','Europe/Prague'], ['Europe/Bratislava','Europe/Bratislava'], ['UTC','UTC'] ] }
+    ];
+    return (
       <Card className="p-6">
-        {renderSectionHeader('SMS nastavení', 'sms')}
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Obecné</h3>
         <div className="space-y-4">
-          <div>
-            <label htmlFor="smsProvider" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              SMS poskytovatel
-            </label>
-            <select
-              id="smsProvider"
-              value={settings.sms.provider}
-              onChange={(e) => handleSettingChange('sms', 'provider', e.target.value)}
-              className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="smsbrana">SMSbrana.cz</option>
-              <option value="twilio" disabled>Twilio (již brzy)</option>
-            </select>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Uživatelské jméno"
-              value={settings.sms.username}
-              onChange={(e) => handleSettingChange('sms', 'username', e.target.value)}
-            />
-            <Input
-              label="Heslo"
-              type="password"
-              value={settings.sms.password || ''}
-              onChange={(e) => handleSettingChange('sms', 'password', e.target.value)}
-              placeholder="Zadejte pro změnu"
-              helperText="Z bezpečnostních důvodů se heslo nezobrazuje. Pro aktualizaci zadejte nové."
-            />
-          </div>
+          {fields.map(f => (
+            <div key={f.name}>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{f.label}</label>
+              {f.type === 'textarea' && (
+                <textarea
+                  value={edited[f.name] ?? ''}
+                  onChange={e => setValue(f.name, e.target.value)}
+                  rows={3}
+                  placeholder={f.label}
+                  aria-label={f.label}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+                />
+              )}
+              {f.type === 'text' && (
+                <Input value={edited[f.name] ?? ''} onChange={e => setValue(f.name, e.target.value)} placeholder={f.label} aria-label={f.label} />
+              )}
+              {f.type === 'select' && (
+                <select
+                  value={edited[f.name] ?? ''}
+                  onChange={e => setValue(f.name, e.target.value)}
+                  aria-label={f.label}
+                  title={f.label}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+                >
+                  {f.options?.map(opt => <option key={opt[0]} value={opt[0]}>{opt[1]}</option>)}
+                </select>
+              )}
+            </div>
+          ))}
         </div>
       </Card>
+    );
+  };
 
-      {/* SMS Test Section */}
+
+
+  // (Odstraněno: kompletní SMS testovací / provider sekce – již mimo rozsah nové architektury)
+
+  const renderSecuritySettings = () => {
+    const fields = [
+      { name: 'session_timeout', label: 'Timeout relace (minuty)', type: 'number', min:5, max:480 },
+      { name: 'max_login_attempts', label: 'Max. pokusů o přihlášení', type: 'number', min:1, max:20 },
+      { name: 'password_min_length', label: 'Min. délka hesla', type: 'number', min:4, max:64 },
+      { name: 'require_two_factor', label: 'Vyžadovat 2FA', type: 'checkbox' }
+    ];
+    return (
       <Card className="p-6">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4 flex items-center">
-          <TestTube className="w-5 h-5 mr-2" />
-          Test SMS služby
-        </h3>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Test Connection & Credit */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Test připojení a kredit</h4>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Ověří připojení k SMS bráně a zobrazí dostupný kredit.
-            </p>
-            <div className="flex space-x-2">
-              <Button
-                onClick={handleTestConnection}
-                disabled={isTestingConnection}
-                variant="secondary"
-                className="flex-1"
-              >
-                {isTestingConnection ? 'Testování...' : 'Test připojení'}
-              </Button>
-              <Button
-                onClick={handleGetCredit}
-                disabled={isLoadingCredit}
-                className="flex-1"
-              >
-                <CreditCard className="w-4 h-4 mr-2" />
-                {isLoadingCredit ? 'Načítání...' : 'Zjistit kredit'}
-              </Button>
-            </div>
-          </div>
-
-          {/* Send Test SMS */}
-          <div className="space-y-4">
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">Odeslat test SMS</h4>
-            
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Bezpečnost</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {fields.filter(f => f.type !== 'checkbox').map(f => (
             <Input
-              label="Telefonní číslo"
-              type="tel"
-              value={testPhone}
-              onChange={(e) => setTestPhone(e.target.value)}
-              placeholder="+420 123 456 789"
+              key={f.name}
+              label={f.label}
+              type="number"
+              value={edited[f.name] ?? ''}
+              onChange={e => setValue(f.name, e.target.value)}
             />
-            
-            <div>
-              <label htmlFor="testMessage" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Text zprávy
-              </label>
-              <textarea
-                id="testMessage"
-                value={testMessage}
-                onChange={(e) => setTestMessage(e.target.value)}
-                rows={3}
-                maxLength={160}
-                className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Text SMS zprávy..."
-              />
-              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-500 mt-1">
-                <span>SMS zpráva (standardní tarif)</span>
-                <span>{testMessage.length}/160 znaků</span>
-              </div>
-            </div>
-            
-            <Button
-              onClick={handleTestSMS}
-              disabled={isSendingSms || !testPhone.trim() || !testMessage.trim()}
-              className="w-full"
-            >
-              <Send className="w-4 h-4 mr-2" />
-              {isSendingSms ? 'Odesílání...' : 'Odeslat test SMS'}
-            </Button>
-          </div>
+          ))}
+        </div>
+        <div className="mt-4 flex items-center space-x-2">
+            <input
+              id="require_two_factor"
+              type="checkbox"
+              checked={(edited['require_two_factor'] ?? 'false') === 'true'}
+              onChange={e => setValue('require_two_factor', String(e.target.checked))}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded"
+              aria-label="Vyžadovat dvoufaktorové ověření"
+            />
+          <label htmlFor="require_two_factor" className="text-sm">Vyžadovat dvoufaktorové ověření</label>
         </div>
       </Card>
-    </div>
-  );
-
-  const renderSecuritySettings = () => (
-    <Card className="p-6">
-      {renderSectionHeader('Bezpečnostní nastavení', 'security')}
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input
-            label="Timeout relace (minuty)"
-            type="number"
-            value={settings.security.sessionTimeout}
-            onChange={(e) => handleSettingChange('security', 'sessionTimeout', parseInt(e.target.value))}
-            min="5"
-            max="480"
-          />
-          <Input
-            label="Max. pokusů o přihlášení"
-            type="number"
-            value={settings.security.maxLoginAttempts}
-            onChange={(e) => handleSettingChange('security', 'maxLoginAttempts', parseInt(e.target.value))}
-            min="3"
-            max="10"
-          />
-          <Input
-            label="Min. délka hesla"
-            type="number"
-            value={settings.security.passwordMinLength}
-            onChange={(e) => handleSettingChange('security', 'passwordMinLength', parseInt(e.target.value))}
-            min="6"
-            max="20"
-          />
-        </div>
-        <div className="flex items-center space-x-2">
-          <input
-            type="checkbox"
-            id="requireTwoFactor"
-            checked={settings.security.requireTwoFactor}
-            onChange={(e) => handleSettingChange('security', 'requireTwoFactor', e.target.checked)}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-          />
-          <label htmlFor="requireTwoFactor" className="text-sm text-gray-700 dark:text-gray-300">
-            Vyžadovat dvoufaktorové ověření
-          </label>
-        </div>
-      </div>
-    </Card>
-  );
+    );
+  };
 
   const renderNotificationSettings = () => (
     <Card className="p-6">
-      {renderSectionHeader('Nastavení notifikací', 'notifications')}
-      <div className="space-y-4">
-        <div className="space-y-3">
-          <div className="flex items-center space-x-2">
+      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Notifikace</h3>
+      <div className="space-y-3">
+        {['email_notifications','sms_notifications','browser_notifications'].map(name => (
+          <div className="flex items-center space-x-2" key={name}>
             <input
               type="checkbox"
-              id="emailNotifications"
-              checked={settings.notifications.emailNotifications}
-              onChange={(e) => handleSettingChange('notifications', 'emailNotifications', e.target.checked)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
+              id={name}
+              checked={(edited[name] ?? 'false') === 'true'}
+              onChange={e => setValue(name, String(e.target.checked))}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded"
             />
-            <label htmlFor="emailNotifications" className="text-sm text-gray-700 dark:text-gray-300">
-              E-mailové notifikace
-            </label>
+            <label htmlFor={name} className="text-sm capitalize">{name.replace(/_/g,' ')}</label>
           </div>
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="smsNotifications"
-              checked={settings.notifications.smsNotifications}
-              onChange={(e) => handleSettingChange('notifications', 'smsNotifications', e.target.checked)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-            />
-            <label htmlFor="smsNotifications" className="text-sm text-gray-700 dark:text-gray-300">
-              SMS notifikace
-            </label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="browserNotifications"
-              checked={settings.notifications.browserNotifications}
-              onChange={(e) => handleSettingChange('notifications', 'browserNotifications', e.target.checked)}
-              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-            />
-            <label htmlFor="browserNotifications" className="text-sm text-gray-700 dark:text-gray-300">
-              Notifikace v prohlížeči
-            </label>
-          </div>
-        </div>
+        ))}
       </div>
     </Card>
   );
 
   const renderAppearanceSettings = () => (
     <Card className="p-6">
-      {renderSectionHeader('Nastavení vzhledu', 'appearance')}
+      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Vzhled</h3>
       <div className="space-y-4">
         <div>
-          <label htmlFor="defaultTheme" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Výchozí téma
-          </label>
+          <label className="block text-sm font-medium mb-1">Výchozí téma</label>
           <select
-            id="defaultTheme"
-            value={settings.appearance.defaultTheme}
-            onChange={(e) => handleSettingChange('appearance', 'defaultTheme', e.target.value as AppSettings['appearance']['defaultTheme'])}
-            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            value={edited['default_theme'] ?? 'system'}
+            onChange={e => setValue('default_theme', e.target.value)}
+            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm"
+            aria-label="Výchozí téma"
+            title="Výchozí téma"
           >
             <option value="system">Podle systému</option>
             <option value="light">Světlé</option>
@@ -526,29 +268,23 @@ export const SettingsView = () => {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Primární barva
-            </label>
+            <label className="block text-sm font-medium mb-1">Primární barva</label>
             <div className="flex space-x-2">
               <input
-                type="color"
-                value={settings.appearance.primaryColor}
-                onChange={(e) => handleSettingChange('appearance', 'primaryColor', e.target.value)}
-                className="w-12 h-10 rounded border border-gray-300 dark:border-gray-600"
-                title="Výběr primární barvy"
-              />
-              <Input
-                value={settings.appearance.primaryColor}
-                onChange={(e) => handleSettingChange('appearance', 'primaryColor', e.target.value)}
-                placeholder="#3b82f6"
-                className="flex-1"
-              />
+                  type="color"
+                  value={edited['primary_color'] ?? '#3b82f6'}
+                  onChange={e => setValue('primary_color', e.target.value)}
+                  className="w-12 h-10 rounded border border-gray-300 dark:border-gray-600"
+                  aria-label="Primární barva"
+                  title="Primární barva"
+                />
+                <Input value={edited['primary_color'] ?? ''} onChange={e => setValue('primary_color', e.target.value)} placeholder="Primární barva" aria-label="Primární barva" />
             </div>
           </div>
           <Input
             label="URL loga"
-            value={settings.appearance.logoUrl}
-            onChange={(e) => handleSettingChange('appearance', 'logoUrl', e.target.value)}
+            value={edited['logo_url'] ?? ''}
+            onChange={e => setValue('logo_url', e.target.value)}
             placeholder="https://example.com/logo.png"
           />
         </div>
@@ -556,121 +292,155 @@ export const SettingsView = () => {
     </Card>
   );
 
-  const renderDatabaseSettings = () => (
-    <Card className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-        Databázové operace
-      </h3>
-      <div className="space-y-4">
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg">
-          <p className="text-sm text-yellow-800 dark:text-yellow-200">
-            <strong>Upozornění:</strong> Tyto operace mohou být nevratné a ovlivnit funkčnost aplikace. 
-            Provádějte je s opatrností.
-          </p>
+  // Ostatní / všechny proměnné (pokud bychom chtěli zobrazit vše)
+  const renderAdvanced = () => {
+    const known: Set<string> = new Set(KNOWN_VARIABLE_ORDER as readonly string[]);
+    // Spoj existující "neznámé" + nově přidané (newVarName je zatím mimo edited dokud nepotvrdíme)
+    const rest = globalVariables.filter((v: GlobalVariable) => !known.has(v.name));
+
+    const handleAddNewVariable = () => {
+      const name = newVarName.trim();
+      if (!name) {
+        showToast('Zadej název proměnné', 'warning');
+        return;
+      }
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) {
+        showToast('Název musí být ve formátu snake_case / alfanumerický s podtržítky', 'error');
+        return;
+      }
+      if (globalMap[name]) {
+        showToast('Proměnná již existuje', 'info');
+        return;
+      }
+      setEdited(prev => ({ ...prev, [name]: newVarValue }));
+      // Do budoucna by bylo možné uložit description separátně – zatím se využije při ukládání (replace underscores)
+      if (newVarDescription) {
+        // Nepřepisujeme description v DB hned – nastaví se až při uložení handleSaveAll (description se generuje z name, pokud v DB neexistuje)
+      }
+      setNewVarName('');
+      setNewVarValue('');
+      setNewVarDescription('');
+      showToast('Proměnná přidána do změn – nezapomeň uložit', 'success');
+    };
+
+    const newVarPending = newVarName.trim().length > 0;
+
+    return (
+      <Card className="p-6 space-y-6">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Ostatní proměnné</h3>
+          <div className="space-y-4">
+            {rest.map((v: GlobalVariable) => (
+              <div key={v.name}>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{v.description || v.name}</label>
+                  <code className="text-xs text-gray-500">{`{{${v.name}}}`}</code>
+                </div>
+                <Input value={edited[v.name] ?? ''} onChange={e => setValue(v.name, e.target.value)} placeholder={v.name} aria-label={v.name} />
+              </div>
+            ))}
+            {rest.length === 0 && (
+              <p className="text-sm text-gray-500">Žádné další proměnné.</p>
+            )}
+          </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Záloha dat</h4>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              Vytvořit zálohu všech dat aplikace (funkce není implementována).
-            </p>
-            <Button size="sm" variant="secondary" disabled>
-              Vytvořit zálohu
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2 flex items-center gap-2">
+            <PlusCircle className="w-4 h-4" /> Přidat novou proměnnou
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+            <Input
+              value={newVarName}
+              onChange={e => setNewVarName(e.target.value)}
+              placeholder="název (např. custom_limit)"
+              aria-label="Název proměnné"
+            />
+            <Input
+              value={newVarValue}
+              onChange={e => setNewVarValue(e.target.value)}
+              placeholder="hodnota"
+              aria-label="Hodnota proměnné"
+            />
+            <Input
+              value={newVarDescription}
+              onChange={e => setNewVarDescription(e.target.value)}
+              placeholder="Popis (volitelný)"
+              aria-label="Popis proměnné"
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button size="sm" variant="secondary" disabled={!newVarPending} onClick={handleAddNewVariable}>
+              Přidat do změn
             </Button>
           </div>
-          <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-            <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Obnovení dat</h4>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-              Obnovit data ze zálohy (funkce není implementována).
-            </p>
-            <Button size="sm" variant="secondary" disabled>
-              Obnovit ze zálohy
-            </Button>
-          </div>
+          <p className="text-xs text-gray-500 mt-2 leading-snug">Nová proměnná se uloží při kliknutí na Uložit. Popis se aktuálně generuje z názvu (lze rozšířit pro uložení vlastního popisu).</p>
         </div>
-      </div>
-    </Card>
-  );
+      </Card>
+    );
+  };
+
+  // (Odstraněno: databázové operace – mimo rozsah této refaktorizace)
 
   const renderActiveSection = () => {
-    if (loadingSettings) {
+    if (loading && !initialLoaded) {
       return (
-        <div className="flex items-center justify-center h-64">
+        <div className="flex items-center justify-center h-48">
           <div className="flex flex-col items-center space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
-            <p className="text-gray-700 dark:text-gray-300">Načítání nastavení...</p>
+            <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent" />
+            <p className="text-sm text-gray-600 dark:text-gray-300">Načítání…</p>
           </div>
         </div>
       );
     }
-    
-    if (settingsError) {
+    if (error) {
       return (
         <Card className="p-6">
-          <div className="flex flex-col items-center justify-center space-y-4 py-8">
-            <div className="rounded-full bg-red-100 dark:bg-red-900/20 p-3">
+          <div className="flex flex-col items-center space-y-4 py-8">
+            <div className="rounded-full bg-red-100 dark:bg-red-900/30 p-3">
               <AlertCircle className="w-8 h-8 text-red-600 dark:text-red-400" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-              Chyba při načítání nastavení
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 text-center max-w-md">
-              Vyskytl se problém při načítání nastavení aplikace. Zobrazujeme výchozí hodnoty.
-            </p>
-            <Button onClick={() => window.location.reload()}>
-              Zkusit znovu
-            </Button>
+            <h3 className="text-lg font-medium">Chyba načítání</h3>
+            <p className="text-sm text-center text-gray-600 dark:text-gray-400">Nepodařilo se načíst data. Zkuste to znovu.</p>
+            <Button onClick={() => refetch()}>Zkusit znovu</Button>
           </div>
         </Card>
       );
     }
-
     switch (activeSection) {
       case 'general': return renderGeneralSettings();
-      case 'sms': return renderSMSSettings();
       case 'security': return renderSecuritySettings();
       case 'notifications': return renderNotificationSettings();
       case 'appearance': return renderAppearanceSettings();
-      case 'database': return renderDatabaseSettings();
-      default: return renderGeneralSettings();
+      case 'advanced': return renderAdvanced();
+      default: return null;
     }
   };
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            Nastavení aplikace
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Konfigurace systému a globálních parametrů
-          </p>
-        </div>
-      </div>
-
+      {renderToolbar()}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-1">
           <Card className="p-4">
             <nav className="space-y-2">
-              {sections.map((section) => (
+              {sections.map(section => (
                 <button
                   key={section.id}
                   onClick={() => setActiveSection(section.id)}
-                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeSection === section.id
-                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-800 dark:text-blue-200'
-                      : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
-                  }`}
+                  className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeSection === section.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-800 dark:text-blue-200' : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}`}
                 >
                   {section.icon}
                   <span>{section.label}</span>
+                  {sections.length && (
+                    <span className="ml-auto text-xs text-gray-400">
+                      {activeSection === section.id && hasAnyChanges && '•'}
+                    </span>
+                  )}
                 </button>
               ))}
             </nav>
           </Card>
         </div>
-
         <div className="lg:col-span-3">
           {renderActiveSection()}
         </div>

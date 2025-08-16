@@ -1,25 +1,31 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { useState, ReactNode, useEffect, useRef } from 'react';
+import { useQuery } from '@apollo/client';
+import { GET_GLOBAL_VARIABLES_QUERY } from '../graphql/globalVariables';
+import type { GlobalVariable } from '../graphql/globalVariables';
+import { ThemeContext, Theme } from './ThemeContextBase.ts';
 
-type Theme = 'light' | 'dark';
-
-interface ThemeContextValue {
-  theme: Theme;
-  toggleTheme: () => void;
-}
-
-const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+// Helper pro zjištění systémového tématu (s guardem kvůli případnému SSR/test prostředí)
+const systemPrefersDark = () => {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+};
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [theme, setTheme] = useState<Theme>(() => {
-    // Check system preference first, then localStorage
-    const savedTheme = localStorage.getItem('theme') as Theme;
-    if (savedTheme) {
-      return savedTheme;
-    }
-    // Default to system preference
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
+  // Flag zda uživatel ručně přepnul téma (pak nerespektujeme budoucí změny default_theme z DB dokud ručně nepřepne znovu)
+  const manualOverrideRef = useRef<boolean>(false);
 
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = localStorage.getItem('theme') as Theme | null;
+    if (stored === 'light' || stored === 'dark') return stored;
+    // fallback systém
+    return systemPrefersDark() ? 'dark' : 'light';
+  });
+  const [primaryColor, setPrimaryColor] = useState<string>('#3b82f6');
+
+  // Načteme globální proměnné (cache-first stačí; SettingsView je refetchuje při uložení)
+  const { data } = useQuery<{ global_variables: GlobalVariable[] }>(GET_GLOBAL_VARIABLES_QUERY, { fetchPolicy: 'cache-first' });
+
+  // Aplikace tématu do DOM
   useEffect(() => {
     localStorage.setItem('theme', theme);
     if (theme === 'dark') {
@@ -29,21 +35,45 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, [theme]);
 
+  // Reakce na změny globálních proměnných default_theme & primary_color
+  useEffect(() => {
+    if (!data?.global_variables) return;
+    const map: Record<string, GlobalVariable> = {};
+    data.global_variables.forEach(g => { map[g.name] = g; });
+
+    // default_theme logika: pokud není manuální override, nastav z DB
+    const defaultTheme = map['default_theme']?.value; // 'light' | 'dark' | 'system'
+    if (!manualOverrideRef.current && defaultTheme) {
+      if (defaultTheme === 'light' || defaultTheme === 'dark') {
+        if (theme !== defaultTheme) setTheme(defaultTheme);
+      } else if (defaultTheme === 'system') {
+        const sys = systemPrefersDark() ? 'dark' : 'light';
+        if (theme !== sys) setTheme(sys);
+      }
+    }
+
+    // primary_color
+    const p = map['primary_color']?.value;
+    if (p && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(p) && p !== primaryColor) {
+      setPrimaryColor(p);
+    }
+  }, [data, theme, primaryColor]);
+
+  // Aplikace primární barvy pomocí CSS var + přegenerování několika utilit (light/dark nuance necháváme na Tailwind default) 
+  useEffect(() => {
+    document.documentElement.style.setProperty('--primary-color', primaryColor);
+    // Možné budoucí doplnění kontrastní barvy
+  }, [primaryColor]);
+
   const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+    manualOverrideRef.current = true; // uživatel nyní ručně volí
+  setTheme((prev: Theme) => prev === 'light' ? 'dark' : 'light');
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, primaryColor }}>
       {children}
     </ThemeContext.Provider>
   );
 };
 
-export const useTheme = (): ThemeContextValue => {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-};

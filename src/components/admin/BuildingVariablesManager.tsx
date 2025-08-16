@@ -14,7 +14,11 @@ import { Input } from '../common/Input';
 import { Modal } from '../common/Modal';
 import { BuildingVariable } from '../../types';
 
-export const BuildingVariablesManager: React.FC = () => {
+interface Props {
+  buildingId: string;
+}
+
+export const BuildingVariablesManager: React.FC<Props> = ({ buildingId }) => {
   const { showToast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingVariable, setEditingVariable] = useState<BuildingVariable | null>(null);
@@ -30,13 +34,16 @@ export const BuildingVariablesManager: React.FC = () => {
     refetchQueries: [GET_BUILDING_VARIABLES],
   });
 
-  const buildingVariables: BuildingVariable[] = data?.building_variables || [];
+  // Všechny proměnné (napříč budovami)
+  const allVariables: BuildingVariable[] = data?.building_variables || [];
+  // Filtrované pro aktuální budovu
+  const buildingVariables = allVariables.filter(v => v.building_id === buildingId);
 
   const [newVariable, setNewVariable] = useState({
     name: '',
     description: '',
     value: '',
-    building_id: ''
+  building_id: buildingId
   });
 
   const handleAddVariable = async () => {
@@ -45,7 +52,8 @@ export const BuildingVariablesManager: React.FC = () => {
       return;
     }
 
-    if (!newVariable.building_id) {
+    // building_id dostáváme z prop; pokud chybí, nelze pokračovat
+    if (!buildingId) {
       showToast('Není vybrána budova', 'error');
       return;
     }
@@ -61,7 +69,7 @@ export const BuildingVariablesManager: React.FC = () => {
       name: variableName,
       description: newVariable.description.trim(),
       value: newVariable.value || '',
-      building_id: newVariable.building_id
+  building_id: buildingId
     };
 
     try {
@@ -81,7 +89,7 @@ export const BuildingVariablesManager: React.FC = () => {
       name: variable.name,
       description: variable.description,
       value: variable.value || '',
-      building_id: variable.building_id
+  building_id: buildingId
     });
     setShowAddModal(true);
   };
@@ -95,14 +103,14 @@ export const BuildingVariablesManager: React.FC = () => {
     const updatedVariableData = {
       description: newVariable.description.trim(),
       value: newVariable.value || '',
-      building_id: newVariable.building_id
+  building_id: buildingId
     };
 
     try {
       await updateVariableMutation({ 
         variables: { 
           name: editingVariable.name, 
-          building_id: editingVariable.building_id, 
+          building_id: buildingId, 
           variable: updatedVariableData 
         } 
       });
@@ -121,7 +129,7 @@ export const BuildingVariablesManager: React.FC = () => {
       deleteVariableMutation({ 
         variables: { 
           name: variable.name, 
-          building_id: variable.building_id 
+          building_id: buildingId 
         } 
       })
         .then(() => showToast('Proměnná budovy byla smazána', 'success'))
@@ -133,12 +141,7 @@ export const BuildingVariablesManager: React.FC = () => {
   };
 
   const resetForm = () => {
-    setNewVariable({
-      name: '',
-      description: '',
-      value: '',
-      building_id: ''
-    });
+  setNewVariable({ name: '', description: '', value: '', building_id: buildingId });
   };
 
   const closeModal = () => {
@@ -247,13 +250,7 @@ export const BuildingVariablesManager: React.FC = () => {
             placeholder="Hodnota proměnné"
           />
 
-          <Input
-            label="ID budovy"
-            value={newVariable.building_id}
-            onChange={(e) => setNewVariable({ ...newVariable, building_id: e.target.value })}
-            placeholder="ID budovy, ke které proměnná patří"
-            helperText="UUID budovy"
-          />
+          {/* ID budovy se nevybírá ručně – přebírá se z aktuálního kontextu */}
 
           <div className="flex justify-end space-x-3">
             <Button variant="secondary" onClick={closeModal}>

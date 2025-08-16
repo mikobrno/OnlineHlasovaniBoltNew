@@ -62,7 +62,6 @@ export const VotesListView: React.FC<VotesListViewProps> = ({ buildingId }) => {
     return (
       <VoteDetailView
         voteId={selectedVoteId}
-        buildingId={buildingId}
         onBack={() => setSelectedVoteId(null)}
         onEdit={(voteToEdit) => {
           setEditingVote(voteToEdit);

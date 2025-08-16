@@ -58,23 +58,23 @@ export interface Vote {
   start_date: string;
   end_date: string;
   building_id: string;
-  status: 'draft' | 'active' | 'completed' | 'archived';
-    questions: {
-      id: string;
-      text: string;
-      description?: string;
-      quorum_type?: 'simple' | 'qualified' | 'unanimous' | 'custom';
-      custom_quorum?: {
-        numerator: number;
-        denominator: number;
-      };
-    }[];
+  status: 'draft' | 'active' | 'completed' | 'archived' | 'cancelled';
+    questions: Question[];
     member_votes?: MemberVote[];
     attachments?: VoteAttachment[];
     observers?: string[];
     created_at: string;
     description?: string;
   }
+
+// Nový centralizovaný typ otázky (kompatibilní s novým VoteDetailView)
+export interface Question {
+  id: string;
+  text: string;
+  quorum_type: string;
+  custom_quorum_numerator?: number;
+  custom_quorum_denominator?: number;
+}
 
   export interface MemberVote {
     member_id: string;

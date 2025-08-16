@@ -3,6 +3,7 @@ import { Plus, Edit, Trash2, Globe, Building, HelpCircle } from 'lucide-react';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { useQuery, useMutation } from '@apollo/client';
+import { GET_GLOBAL_VARIABLES_QUERY } from '../../graphql/globalVariables';
 import {
   GET_DOCUMENT_TEMPLATES,
   ADD_DOCUMENT_TEMPLATE,
@@ -24,17 +25,24 @@ export const DocumentTemplateManager: React.FC<DocumentTemplateManagerProps> = (
 
   const { data, loading, error } = useQuery(GET_DOCUMENT_TEMPLATES, {
     variables: { buildingId },
+    fetchPolicy: 'network-only'
   });
   const { data: buildingsData } = useQuery(GET_BUILDINGS_FOR_TEMPLATES);
+  // Načtení globálních proměnných (např. pro hinty v editoru do budoucna)
+  useQuery(GET_GLOBAL_VARIABLES_QUERY, { fetchPolicy: 'cache-first' });
 
+  const commonRefetch = [{ query: GET_DOCUMENT_TEMPLATES, variables: { buildingId } }];
   const [addTemplate] = useMutation(ADD_DOCUMENT_TEMPLATE, {
-    refetchQueries: [{ query: GET_DOCUMENT_TEMPLATES, variables: { buildingId } }],
+    refetchQueries: commonRefetch,
+    awaitRefetchQueries: true,
   });
   const [updateTemplate] = useMutation(UPDATE_DOCUMENT_TEMPLATE, {
-    refetchQueries: [{ query: GET_DOCUMENT_TEMPLATES, variables: { buildingId } }],
+    refetchQueries: commonRefetch,
+    awaitRefetchQueries: true,
   });
   const [deleteTemplate] = useMutation(DELETE_DOCUMENT_TEMPLATE, {
-    refetchQueries: [{ query: GET_DOCUMENT_TEMPLATES, variables: { buildingId } }],
+    refetchQueries: commonRefetch,
+    awaitRefetchQueries: true,
   });
 
   const templates: DocumentTemplate[] = data?.document_templates || [];

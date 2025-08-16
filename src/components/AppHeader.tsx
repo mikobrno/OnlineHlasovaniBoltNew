@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { Button } from './common/Button';
 import { LogOut, Sun, Moon } from 'lucide-react';
 import type { Building } from '../graphql/buildings';
+import { useTheme } from '../contexts/useTheme';
 
 interface AppHeaderProps {
   selectedBuilding: Building;
@@ -12,30 +13,7 @@ interface AppHeaderProps {
 
 export const AppHeader: React.FC<AppHeaderProps> = ({ selectedBuilding, onDeselectBuilding }) => {
   const { signOut } = useAuth();
-  const [isDarkMode, setIsDarkMode] = React.useState(false);
-
-  React.useEffect(() => {
-    const theme = localStorage.getItem('color-theme');
-    if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      document.documentElement.classList.add('dark');
-      setIsDarkMode(true);
-    } else {
-      document.documentElement.classList.remove('dark');
-      setIsDarkMode(false);
-    }
-  }, []);
-
-  const toggleDarkMode = () => {
-    const newIsDarkMode = !isDarkMode;
-    setIsDarkMode(newIsDarkMode);
-    if (newIsDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('color-theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('color-theme', 'light');
-    }
-  };
+  const { theme, toggleTheme } = useTheme();
 
   const handleLogout = () => {
     if (window.confirm('Opravdu se chcete odhlásit?')) {
@@ -66,11 +44,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ selectedBuilding, onDesele
             <Button
               variant="ghost"
               size="sm"
-              onClick={toggleDarkMode}
+              onClick={toggleTheme}
               className="mr-2 text-gray-600 dark:text-gray-300"
-              title={isDarkMode ? 'Přepnout na světlý režim' : 'Přepnout na tmavý režim'}
+              title={theme === 'dark' ? 'Přepnout na světlý režim' : 'Přepnout na tmavý režim'}
             >
-              {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
             <Button onClick={handleLogout} variant="ghost" size="sm" title="Odhlásit se">
               <LogOut className="h-5 w-5" />

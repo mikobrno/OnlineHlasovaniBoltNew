@@ -34,10 +34,17 @@ export const GET_VOTE_DETAILS = gql`
       }
       observers
     }
-    member_votes_rows: member_votes(where: {vote_id: {_eq: $voteId}}) {
-      member_id
-      question_id
-      answer
+    member_votes_aggregate: member_votes_aggregate(where: {vote_id: {_eq: $voteId}}) {
+      aggregate {
+        count
+      }
+      nodes {
+        id
+        member_id
+        question_id
+        answer
+        vote_id
+      }
     }
     members(where: {building_id: {_eq: $buildingId}}) {
       id

@@ -10,6 +10,25 @@
     linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
 }
 
+/* Enhanced animations for login */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
+  50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.8), 0 0 40px rgba(59, 130, 246, 0.3); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
 /* A4 preview helpers */
 .doc-a4 {
   width: 210mm;
@@ -37,6 +56,15 @@ body {
 .dark {
   color-scheme: dark;
 }
+
+/* Dynamická primární barva z ThemeContext (CSS var --primary-color) */
+:root {
+  --primary-color: #3b82f6; /* fallback */
+}
+
+.text-primary-dynamic { color: var(--primary-color); }
+.bg-primary-dynamic { background-color: var(--primary-color); }
+.border-primary-dynamic { border-color: var(--primary-color); }
 
 /* Loading animation */
 @keyframes spin {
