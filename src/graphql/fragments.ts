@@ -1,7 +1,7 @@
 import { gql } from '@apollo/client';
 
-export const VOTE_FIELDS = gql`
-  fragment VoteFields on votes {
+export const VOTE_DETAIL_FIELDS = gql`
+  fragment VoteDetailFields on votes {
     id
     title
     description

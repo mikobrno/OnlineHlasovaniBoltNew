@@ -10,16 +10,16 @@ import { FullPageSpinner } from '../FullPageSpinner';
 import type { Vote, Question } from '../../types'; // Importujeme z nového centrálního typu
 
 // Import GraphQL fragment
-import { VOTE_FIELDS } from '../../graphql/fragments';
+import { VOTE_DETAIL_FIELDS } from '../../graphql/fragments';
 
 // Komplexní GraphQL dotaz, který načte VŠE potřebné pro detail hlasování
 const GET_VOTE_DETAILS_QUERY = gql`
   query GetVoteDetailsForView($voteId: uuid!) {
     vote: votes_by_pk(id: $voteId) {
-      ...VoteFields
+      ...VoteDetailFields
     }
   }
-  ${VOTE_FIELDS}
+  ${VOTE_DETAIL_FIELDS}
 `;
 
 interface VoteDetailViewProps {

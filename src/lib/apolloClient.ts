@@ -1,15 +1,15 @@
-import { NhostClient } from '@nhost/nhost-js';
 import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
-
-// Konfigurace Nhost klienta z env proměnných (nutné nastavit ve .env.local)
-const nhost = new NhostClient({
-  subdomain: import.meta.env.VITE_NHOST_SUBDOMAIN!,
-  region: import.meta.env.VITE_NHOST_REGION!,
-});
+import { nhost } from './nhostClient';
 
 // HTTP link na GraphQL endpoint (přes Nhost klient získáme URL)
-const httpLink = createHttpLink({ uri: nhost.graphql.getUrl() });
+const httpLink = createHttpLink({ 
+  uri: nhost.graphql.getUrl(),
+  credentials: 'include',
+  fetchOptions: {
+    mode: 'cors'
+  }
+});
 
 // Auth link přidá JWT uživatele do každého požadavku
 const authLink = setContext(async (_, { headers }) => {
