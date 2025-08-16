@@ -1,35 +1,36 @@
-import { useState } from 'react';
+// src/App.tsx
 import { useAuth } from './hooks/useAuth';
 import { Login } from './components/Login';
 import { AppContent } from './components/AppContent';
-import { BuildingSelector } from './components/BuildingSelector';
-import type { Building } from './graphql/buildings';
+import { useToast } from './contexts/ToastContext';
+import { FullPageSpinner } from './components/FullPageSpinner';
 
 function App() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
-  const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
+  const { isAuthenticated, login, isLoading: authLoading } = useAuth();
+  const { showToast } = useToast();
 
-  // Pokud načítáme stav autentizace, zobrazíme loader
+  const handleLogin = async (credentials: { email: string; password: string }) => {
+    const { error } = await login(credentials.email, credentials.password);
+    
+    if (error) {
+      showToast(error.message || 'Neplatné přihlašovací údaje', 'error');
+    } else {
+      showToast('Přihlášení proběhlo úspěšně', 'success');
+    }
+  };
+
+  // Pokud se ověřuje stav přihlášení, zobrazíme spinner na celé stránce
   if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-lg font-medium text-gray-600 dark:text-gray-300">Načítání...</div>
-      </div>
-    );
+    return <FullPageSpinner />;
   }
 
-  // Pokud uživatel není přihlášen, zobrazíme přihlašovací formulář
+  // Pokud není uživatel přihlášen, zobrazíme přihlašovací formulář
   if (!isAuthenticated) {
-    return <Login />;
+    return <Login onLogin={handleLogin} isLoading={authLoading} />;
   }
 
-  // Pokud je uživatel přihlášen, ale nevybral budovu, zobrazíme výběr budov
-  if (!selectedBuilding) {
-    return <BuildingSelector onBuildingSelect={setSelectedBuilding} />;
-  }
-
-  // Po přihlášení a výběru budovy zobrazíme hlavní obsah aplikace
-  return <AppContent selectedBuilding={selectedBuilding} onDeselectBuilding={() => setSelectedBuilding(null)} />;
+  // Po úspěšném přihlášení zobrazíme hlavní obsah aplikace
+  return <AppContent />;
 }
 
 export default App;

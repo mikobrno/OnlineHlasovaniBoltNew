@@ -1,41 +1,61 @@
-import { createContext, ReactNode } from 'react';
-import { useAuthenticationStatus, useUserData, useSignOut } from '@nhost/react';
-import type { User } from '@nhost/nhost-js';
-import type { SignOutlessHandlerResult } from '@nhost/nhost-js';
-import { FullPageSpinner } from '../components/FullPageSpinner';
+// src/contexts/AuthContext.tsx
+import React, { createContext } from 'react';
+import { useAuthenticationStatus, useUserData, useSignInEmailPassword, useSignOut } from '@nhost/react';
 
-// Definujeme typ pro náš kontext
-interface AuthContextType {
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  user: User | null;
-  signOut: () => Promise<SignOutlessHandlerResult>;
+// Tento interface bude reprezentovat data o uživateli, která dostaneme od Nhost
+interface User {
+  id: string;
+  email?: string;
+  displayName?: string;
+  // Můžeme přidat další role a vlastnosti podle potřeby
+  [key: string]: unknown; 
 }
 
-// Vytvoříme kontext
+interface AuthContextType {
+  user: User | null;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<{ error?: { message: string } }>;
+  logout: () => Promise<void>;
+  isAuthenticated: boolean;
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export { AuthContext };
+interface AuthProviderProps {
+  children: React.ReactNode;
+}
 
-// Vytvoříme Provider komponentu
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // Použijeme Nhost hooky pro získání stavu autentizace a dat uživatele
+export function AuthProvider({ children }: AuthProviderProps) {
   const { isAuthenticated, isLoading } = useAuthenticationStatus();
-  const user = useUserData();
+  const nhostUser = useUserData();
+  const { signInEmailPassword } = useSignInEmailPassword();
   const { signOut } = useSignOut();
 
-  // Během načítání stavu z Nhost zobrazíme spinner na celé stránce
-  if (isLoading) {
-    return <FullPageSpinner />;
-  }
-
-  // Hodnota, kterou poskytneme všem komponentám v aplikaci
-  const value = {
-    isAuthenticated,
-    isLoading,
-    user,
-    signOut,
+  const login = async (email: string, password: string) => {
+    const { error } = await signInEmailPassword(email, password);
+    if (error) {
+      return { error: { message: error.message } };
+    }
+    return {};
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+  const logout = async () => {
+    await signOut();
+  };
+
+  const value: AuthContextType = {
+    user: nhostUser as User | null,
+    isLoading,
+    login,
+    logout,
+    isAuthenticated
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export { AuthContext };

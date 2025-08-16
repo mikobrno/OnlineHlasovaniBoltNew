@@ -7,17 +7,17 @@ import type { Building } from '../graphql/buildings';
 import { useTheme } from '../contexts/useTheme';
 
 interface AppHeaderProps {
-  selectedBuilding: Building;
-  onDeselectBuilding: () => void;
+  selectedBuilding?: Building;
+  onDeselectBuilding?: () => void;
 }
 
 export const AppHeader: React.FC<AppHeaderProps> = ({ selectedBuilding, onDeselectBuilding }) => {
-  const { signOut } = useAuth();
+  const { logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const handleLogout = () => {
     if (window.confirm('Opravdu se chcete odhlásit?')) {
-      signOut();
+  logout();
     }
   };
 
@@ -34,9 +34,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ selectedBuilding, onDesele
                 <span className="bg-blue-100 text-blue-800 text-sm font-medium mr-2 px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">
                   {selectedBuilding.name}
                 </span>
+                {onDeselectBuilding && (
                 <Button variant="secondary" size="sm" onClick={onDeselectBuilding}>
                   Změnit SVJ
                 </Button>
+                )}
               </div>
             )}
           </div>
@@ -61,9 +63,11 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ selectedBuilding, onDesele
               <span className="bg-blue-100 text-blue-800 text-sm font-medium mr-2 px-2.5 py-0.5 rounded dark:bg-blue-900 dark:text-blue-300">
                 {selectedBuilding.name}
               </span>
-              <Button variant="secondary" size="sm" onClick={onDeselectBuilding}>
-                Změnit SVJ
-              </Button>
+              {onDeselectBuilding && (
+                <Button variant="secondary" size="sm" onClick={onDeselectBuilding}>
+                  Změnit SVJ
+                </Button>
+              )}
             </div>
           </div>
         )}

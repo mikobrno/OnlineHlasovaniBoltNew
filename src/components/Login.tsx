@@ -7,7 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, Lock, Shield, Mail, Eye, EyeOff } from 'lucide-react';
 
-export const Login = () => {
+interface LoginProps {
+  onLogin?: (credentials: { email: string; password: string }) => Promise<void> | void;
+  isLoading?: boolean;
+}
+
+export const Login: React.FC<LoginProps> = ({ onLogin, isLoading: externalLoading }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -16,7 +21,11 @@ export const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    await signInEmailPassword(email, password);
+    if (onLogin) {
+      await Promise.resolve(onLogin({ email, password }));
+    } else {
+      await signInEmailPassword(email, password);
+    }
   };
 
   // Pokud je přihlášení úspěšné, přesměrujeme uživatele na hlavní stránku
@@ -71,7 +80,7 @@ export const Login = () => {
                     required
                     value={email}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
-                    disabled={isLoading}
+                    disabled={externalLoading ?? isLoading}
                     className="h-12 bg-white/10 border-white/20 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 text-white placeholder:text-indigo-200/50 rounded-xl text-base transition-all duration-200"
                     autoComplete="email"
                   />
@@ -92,7 +101,7 @@ export const Login = () => {
                     required
                     value={password}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                    disabled={isLoading}
+                    disabled={externalLoading ?? isLoading}
                     className="h-12 bg-white/10 border-white/20 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 text-white placeholder:text-indigo-200/50 rounded-xl text-base pr-12 transition-all duration-200"
                     autoComplete="current-password"
                   />
@@ -123,7 +132,7 @@ export const Login = () => {
                 className="w-full h-12 text-base font-semibold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 border-0 shadow-xl shadow-blue-900/50 rounded-xl transition-all duration-300 transform hover:scale-[1.02] hover:shadow-2xl disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100" 
                 disabled={isLoading}
               >
-                {isLoading ? (
+                {(externalLoading ?? isLoading) ? (
                   <div className="flex items-center justify-center gap-3">
                     <div className="animate-spin rounded-full h-5 w-5 border-2 border-white/70 border-t-transparent" />
                     <span>Přihlašuji se...</span>
