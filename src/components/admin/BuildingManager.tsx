@@ -8,7 +8,7 @@ import { useToast } from '../../contexts/ToastContext';
 
 // GraphQL dotazy
 const GET_BUILDINGS_QUERY = gql`
-  query GetBuildings {
+  query GetBuildingsForManager {
     buildings {
       id
       name

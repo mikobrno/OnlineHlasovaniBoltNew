@@ -12,7 +12,7 @@ export const GLOBAL_VARIABLE_FIELDS = gql`
 `;
 
 export const GET_GLOBAL_VARIABLES = gql`
-  query GetGlobalVariables {
+  query GetGlobalVariablesV2 {
     global_variables(order_by: { name: asc }) {
       ...GlobalVariableFieldsV2
     }
@@ -40,7 +40,7 @@ export const ADD_GLOBAL_VARIABLE = gql`
 `;
 
 export const UPDATE_GLOBAL_VARIABLE = gql`
-  mutation UpdateGlobalVariable($name: String!, $variable: global_variables_set_input!) {
+  mutation UpdateGlobalVariableV2($name: String!, $variable: global_variables_set_input!) {
     update_global_variables_by_pk(pk_columns: { name: $name }, _set: $variable) {
       ...GlobalVariableFieldsV2
     }

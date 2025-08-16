@@ -64,7 +64,7 @@ export const UPDATE_VOTE = gql`
   start_date
   end_date
   building_id
-  questions { id text quorum_type custom_quorum_numerator custom_quorum_denominator }
+  questions
     }
   }
 `;

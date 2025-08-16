@@ -64,7 +64,19 @@ export interface Vote {
       unit: string;
     };
   }>;
-  observers?: string[];
+  observers_list?: string[];
+  observers_aggregate?: {
+    aggregate: {
+      count: number;
+    };
+  };
   memberVotes?: Record<string, Record<string, 'yes' | 'no' | 'abstain'>>;
 }
 
+// Typ pro Observer (Pozorovatel)
+export interface Observer {
+  id: string;
+  name: string;
+  email: string;
+  building_id: string;
+}

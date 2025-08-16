@@ -9,7 +9,7 @@ import { Vote } from './VotesListView';
 
 // GraphQL mutace pro spuštění hlasování
 const START_VOTE_MUTATION = gql`
-  mutation StartVote($id: uuid!) {
+  mutation StartVoteFromCard($id: uuid!) {
     update_votes_by_pk(
       pk_columns: { id: $id }
       _set: { 
@@ -99,10 +99,10 @@ export const VoteCard: React.FC<VoteCardProps> = ({ vote, onClick, totalMembers 
             <span>{(vote.questions ? vote.questions.length : 0)} otázek</span>
           </div>
 
-          {Array.isArray(vote.observers) && vote.observers.length > 0 && (
+          {vote.observers_aggregate?.aggregate?.count > 0 && (
             <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
               <Eye className="w-4 h-4 mr-2" />
-              <span>{vote.observers.length} pozorovatelů</span>
+              <span>{vote.observers_aggregate.aggregate.count} pozorovatelů</span>
             </div>
           )}
         </div>

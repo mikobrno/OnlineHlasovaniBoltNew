@@ -1,6 +1,8 @@
 import { NhostClient } from '@nhost/nhost-js';
 import { nhost } from './nhostClient';
 
+export { nhost };
+
 /**
  * Helper funkce pro získání JWT tokenu
  */

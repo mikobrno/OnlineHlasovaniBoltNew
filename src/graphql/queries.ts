@@ -1,7 +1,7 @@
 import { gql } from '@apollo/client';
 
 export const GET_BUILDINGS_QUERY = gql`
-  query GetBuildings {
+  query GetBuildingsFromQueries {
     buildings {
       id
       name
@@ -24,14 +24,7 @@ export const GET_VOTE_DETAILS = gql`
       status
       created_at
       building_id
-      questions {
-        id
-        text
-        description
-        quorum_type
-        custom_quorum_numerator
-        custom_quorum_denominator
-      }
+      questions
       observers
     }
     member_votes_aggregate: member_votes_aggregate(where: {vote_id: {_eq: $voteId}}) {
@@ -41,7 +34,6 @@ export const GET_VOTE_DETAILS = gql`
       nodes {
         id
         member_id
-        question_id
         answer
         vote_id
       }
@@ -73,13 +65,12 @@ export const GET_DATA_FOR_INVITATION_MODAL = gql`
       id
       name
       address
-      members(order_by: { name: asc }) {
-        id
-        name
-        email
-        share
-        is_owner
-      }
+    }
+    members(where: {building_id: {_eq: $buildingId}}, order_by: { name: asc }) {
+      id
+      name
+      email
+      vote_weight
     }
     email_templates(
       where: { _or: [{ building_id: { _eq: $buildingId } }, { is_global: { _eq: true } }] }

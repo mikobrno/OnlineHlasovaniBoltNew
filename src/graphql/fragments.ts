@@ -10,23 +10,24 @@ export const VOTE_FIELDS = gql`
     end_date
     created_at
     building_id
+    questions {
+      id
+      text
+      type
+      options
+      required
+      order
+    }
+    observers
     manual_vote_attachments {
       id
       attachment_name
+      created_at
       member {
         id
         name
         unit
       }
-      created_at
     }
-    questions {
-      id
-      text
-      quorum_type
-      custom_quorum_numerator
-      custom_quorum_denominator
-    }
-    observers
   }
 `;

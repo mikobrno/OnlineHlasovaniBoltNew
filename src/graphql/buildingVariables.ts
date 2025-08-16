@@ -40,7 +40,7 @@ export const UPDATE_BUILDING_VARIABLE = gql`
 
 export const DELETE_BUILDING_VARIABLE = gql`
   mutation DeleteBuildingVariable($name: String!, $building_id: uuid!) {
-    delete_building_variables_by_pk(pk_columns: { name: $name, building_id: $building_id }) {
+    delete_building_variables_by_pk(name: $name, building_id: $building_id) {
       name
       building_id
     }

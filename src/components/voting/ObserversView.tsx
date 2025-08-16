@@ -31,9 +31,13 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
     skip: !buildingId,
   });
 
-  // Observers v votes jsou pole textů (emailů)
-  const voteObserverEmails = vote.observers || [];
+  // Observers v votes jsou pole emailů z JSONB pole observers_list
+  const voteObserverEmails = vote.observers_list || [];
   const buildingObservers: Observer[] = observersData?.observers || [];
+  
+  // Počet pozorovatelů z observers_aggregate
+  const observersCount = vote.observers_aggregate?.aggregate?.count || 0;
+  
   const voteObservers = buildingObservers.filter(o => voteObserverEmails.includes(o.email));
   const availableObservers = buildingObservers.filter(o => !voteObserverEmails.includes(o.email));
 

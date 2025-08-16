@@ -14,7 +14,7 @@ import { VOTE_FIELDS } from '../../graphql/fragments';
 
 // Komplexní GraphQL dotaz, který načte VŠE potřebné pro detail hlasování
 const GET_VOTE_DETAILS_QUERY = gql`
-  query GetVoteDetails($voteId: uuid!) {
+  query GetVoteDetailsForView($voteId: uuid!) {
     vote: votes_by_pk(id: $voteId) {
       ...VoteFields
     }

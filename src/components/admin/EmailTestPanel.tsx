@@ -1,12 +1,11 @@
-import React, { useState, useRef } from 'react';
-import { useMutation, ApolloError } from '@apollo/client';
+import React, { useState } from 'react';
 import { Send, Mail } from 'lucide-react';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Textarea } from '../common/Textarea';
 import { useToast } from '../../contexts/ToastContext';
-import { SEND_TEST_EMAIL_MUTATION, sendTestEmailFallback } from '../../graphql/email';
+import { sendTestEmail } from '../../lib/nhostFunctions';
 
 export const EmailTestPanel: React.FC = () => {
   const { showToast } = useToast();
@@ -19,16 +18,8 @@ export const EmailTestPanel: React.FC = () => {
   );
 
   // Nepoužíváme errorPolicy 'all', aby GraphQL validační chyba (chybějící akce) vyhodila exception
-  const [sendTestEmail, { loading, data, error }] = useMutation(
-    SEND_TEST_EMAIL_MUTATION
-  );
-
-  const [fallbackResult, setFallbackResult] = useState<{ success: boolean; message: string } | null>(null);
-  const graphQLErrorMessage = error instanceof ApolloError ? error.message : '';
-  const missingActionRegex = /field\s+'?sendEmail'?\s+not\s+found/i;
-  const [forceFallback, setForceFallback] = useState(false);
-  const isGraphQLAvailable = !forceFallback && (!graphQLErrorMessage || !missingActionRegex.test(graphQLErrorMessage));
-  const triedGraphQLOnce = useRef(false);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,42 +27,24 @@ export const EmailTestPanel: React.FC = () => {
       showToast('Všechna pole jsou povinná.', 'warning');
       return;
     }
-    // Nejprve se pokusíme o GraphQL mutaci; pokud neexistuje, spadne na fallback
+
+    setLoading(true);
     try {
-      if (isGraphQLAvailable) {
-        triedGraphQLOnce.current = true;
-  const result = await sendTestEmail({ variables: { to, subject, body } });
-  // Apollo vyhodí error při chybě schématu => catch blok. Když vrátí data bez field success, fallback.
-  type SendEmailData = { sendEmail?: { success?: boolean; message?: string } } | undefined;
-  const gqlData: SendEmailData = result?.data as SendEmailData;
-  const success = gqlData?.sendEmail?.success === true;
-        if (success) {
-          showToast('Email odeslán (GraphQL).', 'success');
-        } else {
-          // Pokud akce neexistuje nebo není success -> fallback
-            const res = await sendTestEmailFallback(to, subject, body);
-            setFallbackResult(res);
-            if (!res.success) setForceFallback(true);
-            showToast(res.success ? 'Email odeslán (fallback)' : 'Chyba při odeslání (fallback)', res.success ? 'success' : 'error');
-        }
-        return;
-      }
-      // Přímý fallback
-      const res = await sendTestEmailFallback(to, subject, body);
-      setFallbackResult(res);
-      showToast(res.success ? 'Email odeslán (fallback)' : 'Chyba při odeslání (fallback)', res.success ? 'success' : 'error');
+      const response = await sendTestEmail(to, subject, body);
+      setResult(response);
+      showToast(
+        response.success ? 'Email byl úspěšně odeslán' : 'Chyba při odesílání emailu',
+        response.success ? 'success' : 'error'
+      );
     } catch (err) {
-      const msg = (err as Error)?.message || '';
-      const needsFallback = missingActionRegex.test(msg) || /validation/i.test(msg) || /not\s+found/i.test(msg);
-      if (needsFallback) {
-        setForceFallback(true);
-        const res = await sendTestEmailFallback(to, subject, body);
-        setFallbackResult(res);
-        showToast(res.success ? 'Email odeslán (fallback)' : 'Chyba při odeslání (fallback)', res.success ? 'success' : 'error');
-      } else {
-        console.error('Chyba při odesílání testovacího e-mailu:', err);
-        showToast('Došlo k chybě při odesílání.', 'error');
-      }
+      console.error('Chyba při odesílání testovacího e-mailu:', err);
+      showToast('Došlo k chybě při odesílání.', 'error');
+      setResult({
+        success: false,
+        message: (err as Error)?.message || 'Neznámá chyba při odesílání'
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -125,33 +98,21 @@ export const EmailTestPanel: React.FC = () => {
         </div>
       </form>
 
-      {(data || error || fallbackResult) && (
+      {result && (
         <div className="mt-6">
           <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
             Výsledek posledního odeslání
           </h3>
-          {data?.sendEmail?.success && !forceFallback && (
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg text-green-800 dark:text-green-200">
-              <p className="font-bold">Úspěch!</p>
-              <p className="text-sm">{data.sendEmail.message}</p>
-            </div>
-          )}
-          {fallbackResult && (
-            <div className={`p-4 ${fallbackResult.success ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-200' : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'} rounded-lg`}>
-              <p className="font-bold">{fallbackResult.success ? 'Úspěch (fallback)!' : 'Chyba (fallback)!'}</p>
-              <p className="text-sm">{fallbackResult.message}</p>
-            </div>
-          )}
-          {(error && !missingActionRegex.test(error.message) && !data?.sendEmail?.success && !forceFallback) && (
-            <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
-              <p className="font-bold">Chyba!</p>
-              <p className="text-sm">
-                {error?.message ||
-                  data?.sendEmail?.message ||
-                  'Neznámá chyba při odesílání.'}
-              </p>
-            </div>
-          )}
+          <div
+            className={`p-4 ${
+              result.success
+                ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-200'
+                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200'
+            } rounded-lg`}
+          >
+            <p className="font-bold">{result.success ? 'Úspěch!' : 'Chyba!'}</p>
+            <p className="text-sm">{result.message}</p>
+          </div>
         </div>
       )}
     </Card>
