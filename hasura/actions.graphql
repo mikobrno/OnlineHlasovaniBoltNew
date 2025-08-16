@@ -1,0 +1,8 @@
+type Mutation {
+  sendEmail(to: String!, subject: String!, text: String, html: String): SendEmailResult!
+}
+
+type SendEmailResult {
+  ok: Boolean!
+  error: String
+}

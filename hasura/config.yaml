@@ -1,0 +1,10 @@
+version: 3
+endpoint: http://localhost:8080
+admin_secret: nhost-admin-secret
+metadata_directory: metadata
+actions:
+  handler_webhook_baseurl: '{{NHOST_BACKEND_URL}}'
+  kind: synchronous
+  timeout: 30
+environment_variables:
+  NHOST_BACKEND_URL: https://onlinehlasovaniboltnew.functions.eu-central-1.nhost.run
