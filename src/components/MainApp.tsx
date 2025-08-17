@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppNavigation } from './AppNavigation';
-import { VotesListView } from './voting/VotesListView';
+import { VotesModule } from '../modules/votes';
 import { MembersView } from './members/MembersView';
 import { SimpleGeneratorView } from './email/SimpleGeneratorView';
 import { AdminView } from './admin/AdminView';
@@ -16,7 +16,7 @@ export const MainApp: React.FC<MainAppProps> = ({ selectedBuilding }) => {
   const renderActiveView = () => {
     switch (activeTab) {
       case 'votes':
-        return <VotesListView buildingId={selectedBuilding.id} />;
+        return <VotesModule buildingId={selectedBuilding.id} />;
       case 'members':
         return <MembersView buildingId={selectedBuilding.id} />;
       case 'emails':
@@ -24,7 +24,7 @@ export const MainApp: React.FC<MainAppProps> = ({ selectedBuilding }) => {
       case 'admin':
         return <AdminView buildingId={selectedBuilding.id} />;
       default:
-        return <VotesListView buildingId={selectedBuilding.id} />;
+        return <VotesModule buildingId={selectedBuilding.id} />;
     }
   };
 

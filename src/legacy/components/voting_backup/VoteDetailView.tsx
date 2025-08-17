@@ -1,4 +1,6 @@
 // src/components/voting/VoteDetailView.tsx
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars */
 
 import React, { useState } from 'react';
 import { ArrowLeft, Edit, Play, FileText, Mail, Eye, BarChart3 } from 'lucide-react';
@@ -7,14 +9,6 @@ import { Button } from '../common/Button';
 import { Card } from '../common/Card';
 import { getVoteStatusText, getVoteStatusColor } from '../../lib/utils';
 import { FullPageSpinner } from '../FullPageSpinner';
-type VoteQuestion = {
-  question: {
-    id: string;
-    text: string;
-    type: string;
-  };
-};
-
 type Building = {
   id: string;
   name: string;
@@ -40,24 +34,26 @@ type DetailVote = {
   end_date?: string;
   created_at: string;
   building?: Building;
-  vote_questions?: VoteQuestion[];
+  questions?: any;
   manual_vote_attachments: Attachment[];
 };
 
-import { VOTE_FIELDS_BASIC } from '../../graphql/fragments';
-
-// Základní GraphQL dotaz pro detail hlasování
+// GraphQL dotaz pro detail hlasování
+// POZNÁMKA: `questions` může být v DB uložen jako JSON/jsonb scalar. Nepožadujeme
+// subfields v dotazu (to způsobí "unexpected subselection"). Komponenta si pole
+// bezpečně rozparsuje níže a bude podporovat různé tvary dat.
 const GET_VOTE_DETAILS_QUERY = gql`
   query GetVoteDetailsForView($voteId: uuid!) {
     votes_by_pk(id: $voteId) {
-      ...VoteFieldsBasic
-      vote_questions {
-        question {
-          id
-          text
-          type
-        }
-      }
+      id
+      title
+      description
+      status
+      start_date
+      end_date
+      created_at
+      building_id
+      questions
       manual_vote_attachments {
         id
         attachment_name
@@ -69,7 +65,6 @@ const GET_VOTE_DETAILS_QUERY = gql`
       }
     }
   }
-  ${VOTE_FIELDS_BASIC}
 `;
 
 interface VoteDetailViewProps {
@@ -226,18 +221,44 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
                 Hlasovací otázky
               </h3>
               <div className="space-y-4">
-                {data?.votes_by_pk?.vote_questions?.map(({ question }, index) => (
-                  <div key={question.id} className="border-l-4 border-blue-500 pl-4">
-                    <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                      {index + 1}. {question.text}
-                    </h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Typ: {question.type}
-                    </p>
-                  </div>
-                )) || (
-                  <p className="text-gray-500">Žádné otázky nejsou k dispozici</p>
-                )}
+                {(() => {
+                  const raw: unknown = data?.votes_by_pk?.questions;
+                  let parsed: unknown[] = [];
+                  if (Array.isArray(raw)) {
+                    parsed = raw as unknown[];
+                  } else if (typeof raw === 'string') {
+                    try {
+                      parsed = JSON.parse(raw as string) as unknown[];
+                    } catch (e) {
+                      parsed = [];
+                    }
+                  } else if (raw == null) {
+                    parsed = [];
+                  } else {
+                    // fallback - try to coerce to array
+                    parsed = Array.isArray((raw as any).questions) ? (raw as any).questions : [];
+                  }
+
+                  if (parsed.length === 0) {
+                    return <p className="text-gray-500">Žádné otázky nejsou k dispozici</p>;
+                  }
+
+                  return (parsed as unknown[]).map((question, index: number) => {
+                    const q = question as any;
+                    return (
+                      <div key={q?.id || index} className="border-l-4 border-blue-500 pl-4">
+                        <h4 className="font-medium text-gray-900 dark:text-gray-100">
+                          {index + 1}. {q?.text || q?.title || q?.question_text}
+                        </h4>
+                        {q?.type && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Typ: {q.type}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </Card>
           </div>

@@ -42,6 +42,12 @@ class VotingTokenService {
     return this.tokens.find(t => t.token === token) || null;
   }
 
+  // Helper to resolve a public token string to the underlying voteId
+  resolveTokenToVoteId(token: string): string | null {
+    const t = this.getTokenByToken(token);
+    return t ? t.voteId : null;
+  }
+
   getTokenByVerificationCode(code: string): VotingToken | null {
     return this.tokens.find(t => t.verificationCode === code && !this.isExpired(t)) || null;
   }

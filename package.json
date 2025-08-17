@@ -22,6 +22,7 @@
   "dependencies": {
     "@apollo/client": "^3.13.9",
     "@google/generative-ai": "^0.24.1",
+    "@hookform/resolvers": "^5.2.1",
     "@nhost/nhost-js": "^3.3.0",
     "@nhost/react": "^3.11.1",
     "@nhost/react-apollo": "^18.0.1",
@@ -32,7 +33,9 @@
     "nodemailer": "^6.9.13",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.7.1"
+    "react-hook-form": "^7.62.0",
+    "react-router-dom": "^7.7.1",
+    "zod": "^4.0.17"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
