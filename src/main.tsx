@@ -9,25 +9,22 @@ import { ToastProvider } from './contexts/ToastContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
 import { NhostProvider } from '@nhost/react';
-import { NhostApolloProvider } from '@nhost/react-apollo';
 import { nhost } from './lib/nhostClient';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <NhostProvider nhost={nhost}>
-      <NhostApolloProvider nhost={nhost}>
-        <BrowserRouter>
-          <ToastProvider>
-            <ThemeProvider>
-              <AuthProvider>
-                <AppProvider>
-                  <App />
-                </AppProvider>
-              </AuthProvider>
-            </ThemeProvider>
-          </ToastProvider>
-        </BrowserRouter>
-      </NhostApolloProvider>
+      <BrowserRouter>
+        <ToastProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <AppProvider>
+                <App />
+              </AppProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </ToastProvider>
+      </BrowserRouter>
     </NhostProvider>
   </StrictMode>
 );

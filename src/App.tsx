@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useAuth } from './hooks/useAuth';
+import { useAuth } from './contexts/AuthContext';
 import { Login } from './components/Login';
 import { AppContent } from './components/AppContent';
 import { FullPageSpinner } from './components/FullPageSpinner';

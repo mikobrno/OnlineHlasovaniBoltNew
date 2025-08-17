@@ -1,47 +1,38 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import React from 'react';
+import { useState } from 'react';
+import { nhost } from '../lib/nhostClient';
+import { useQuery } from '@apollo/client';
+import { GET_USER_BUILDINGS } from '../graphql/queries';
+import { AppContext, Building, Settings } from './appContext.types';
 
-// Typy
-export interface Building {
-    id: string;
-    name: string;
-    address: string;
-    total_units: number;
-    variables: Record<string, any>;
-    created_at: string;
-    updated_at: string;
-}
-
-interface AppContextType {
-    selectedBuilding: Building | null;
-    selectBuilding: (building: Building | null) => void;
-}
-
-// Vytvoření kontextu
-const AppContext = createContext<AppContextType | null>(null);
-
-// Provider komponenta
-
-export function AppProvider({ children }: { children: ReactNode }) {
+export function AppProvider({ children }: { children: React.ReactNode }) {
     const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
+    const [settings] = useState<Settings>({ buildingId: null });
+
+    const { data: buildingsData } = useQuery(GET_USER_BUILDINGS, {
+        skip: !nhost.auth.getAccessToken(),
+    });
+
+    // Pokud máme data o budovách a není vybraná žádná, vybereme první
+    React.useEffect(() => {
+        if (buildingsData?.buildings?.length > 0 && !selectedBuilding) {
+            setSelectedBuilding(buildingsData.buildings[0]);
+        }
+    }, [buildingsData, selectedBuilding]);
 
     const selectBuilding = (building: Building | null) => {
         setSelectedBuilding(building);
     };
 
     return (
-        <AppContext.Provider value={{ selectedBuilding, selectBuilding }}>
+        <AppContext.Provider value={{
+            selectedBuilding,
+            selectBuilding,
+            settings,
+        }}>
             {children}
         </AppContext.Provider>
     );
-}
-
-// Hook pro použití kontextu
-export function useApp() {
-    const context = useContext(AppContext);
-    if (!context) {
-        throw new Error('useApp must be used within an AppProvider');
-    }
-    return context;
 }
 
 

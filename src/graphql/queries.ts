@@ -1,12 +1,13 @@
 import { gql } from '@apollo/client';
 
-export const GET_BUILDINGS_QUERY = gql`
-  query GetBuildingsFromQueries {
+export const GET_USER_BUILDINGS = gql`
+  query GetUserBuildings {
     buildings {
       id
       name
       address
       total_units
+      variables
       created_at
       updated_at
     }

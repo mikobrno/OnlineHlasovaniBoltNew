@@ -1,12 +1,8 @@
-import { NhostClient } from '@nhost/nhost-js';
-
-const subdomain = 'zrgbhrxnkjggssfhjqwp';
-const region = 'eu-central-1';
+// src/lib/nhostClient.ts
+import { NhostClient } from '@nhost/nextjs';
 
 export const nhost = new NhostClient({
-  subdomain,
-  region,
-  clientStorageType: 'localStorage',
-  clientStorage: globalThis?.localStorage,
-  refreshIntervalTime: 600000 // 10 minutes
+  // Vložte sem vaše skutečné údaje z Nhost dashboardu
+  subdomain: 'your-nhost-subdomain',
+  region: 'your-nhost-region'
 });

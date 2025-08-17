@@ -1,95 +1,120 @@
-// src/modules/votes/components/VotesListView.tsx
-import { FC, useState } from 'react';
-import { useQuery } from '@apollo/client';
-import { Plus, Search, Vote } from 'lucide-react';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { useVoteContext } from '../context/VoteContext';
-import { GET_VOTES } from '../graphql/queries';
-import { Vote as VoteType } from '../types';
+// src/components/voting/VotesListView.tsx
+
+import React, { useState, useMemo } from 'react';
+import { Plus, Search } from 'lucide-react';
+import { useQuery, gql } from '@apollo/client';
+import { useApp } from '../../contexts/AppContext';
+import { PageHeader } from '../common/PageHeader';
+import { Input } from '../common/Input';
+import { Card } from '../common/Card';
 import { VoteCard } from './VoteCard';
-import { getVoteStatusColor, getVoteStatusText } from '@/lib/utils';
+import { VoteDetailView } from './VoteDetailView';
+import { VoteFormView } from './VoteFormView';
+import { FullPageSpinner } from '../FullPageSpinner';
+import type { Vote } from '../../types';
 
-interface VotesListViewProps {
-  buildingId: string;
-}
+const GET_VOTES_QUERY = gql`
+  query GetVotes($buildingId: uuid!) {
+    votes(where: { building_id: { _eq: $buildingId } }, order_by: { created_at: desc }) {
+      id
+      title
+      status
+      created_at
+      start_date
+      end_date
+    }
+  }
+`;
 
-export const VotesListView: FC<VotesListViewProps> = ({ buildingId }) => {
+export const VotesListView: React.FC = () => {
+  const { selectedBuilding } = useApp();
+  const [showForm, setShowForm] = useState(false);
+  const [editingVote, setEditingVote] = useState<Vote | null>(null);
+  const [selectedVoteId, setSelectedVoteId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  const { data, loading, error } = useQuery(GET_VOTES_QUERY, {
+    variables: { buildingId: selectedBuilding?.id },
+    skip: !selectedBuilding,
+  });
+
+  const filteredVotes = useMemo(() => {
+    if (!data?.votes) return [];
+    return data.votes.filter((vote: Vote) =>
+      vote.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [data?.votes, searchTerm]);
+
+  if (!selectedBuilding) {
+    return <div>Vyberte budovu pro zobrazení hlasování.</div>;
+  }
   
-  const { data, loading, error } = useQuery(GET_VOTES, {
-    variables: { buildingId },
-  });
+  if (loading) {
+    return <FullPageSpinner message="Načítám hlasování..." />;
+  }
 
-  const { setSelectedVote, openVoteForm } = useVoteContext();
+  if (error) {
+    return <div>Chyba při načítání hlasování: {error.message}</div>;
+  }
+  
+  if (selectedVoteId) {
+    return (
+      <VoteDetailView
+        voteId={selectedVoteId}
+        onBack={() => setSelectedVoteId(null)}
+        onEdit={(voteToEdit) => {
+          setEditingVote(voteToEdit);
+          setSelectedVoteId(null);
+          setShowForm(true);
+        }}
+      />
+    );
+  }
 
-  if (loading) return <div>Načítám...</div>;
-  if (error) return <div>Chyba: {error.message}</div>;
-
-  const votes = data?.votes || [];
-
-  const filteredVotes = votes.filter((vote: VoteType) => {
-    const matchesSearch = vote.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || vote.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  if (showForm) {
+    return (
+      <VoteFormView
+        vote={editingVote}
+        onBack={() => {
+          setShowForm(false);
+          setEditingVote(null);
+        }}
+        buildingId={selectedBuilding.id}
+      />
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <Vote className="w-6 h-6" />
-          Hlasování
-        </h1>
-        <Button onClick={openVoteForm}>
-          <Plus className="w-4 h-4 mr-2" />
-          Nové hlasování
-        </Button>
-      </div>
-
-      <Card className="p-4">
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <Input
-              placeholder="Vyhledat hlasování..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full"
-              leftIcon={<Search className="w-4 h-4" />}
-            />
-          </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
-          >
-            <option value="all">Všechny stavy</option>
-            <option value="draft">Koncepty</option>
-            <option value="active">Aktivní</option>
-            <option value="completed">Dokončené</option>
-            <option value="cancelled">Zrušené</option>
-          </select>
+    <div>
+      <PageHeader
+        title="Přehled hlasování"
+        actions={
+          <Button onClick={() => { setEditingVote(null); setShowForm(true); }}>
+            <Plus className="w-4 h-4 mr-2" />
+            Nové hlasování
+          </Button>
+        }
+      />
+      <Card className="p-4 mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Input
+            placeholder="Hledat hlasování..."
+            className="pl-10"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
       </Card>
 
-      <div className="grid gap-4">
-        {filteredVotes.map((vote: VoteType) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredVotes.map((vote: Vote) => (
           <VoteCard
             key={vote.id}
             vote={vote}
-            onClick={() => setSelectedVote(vote)}
+            onSelect={() => setSelectedVoteId(vote.id)}
           />
         ))}
-
-        {filteredVotes.length === 0 && (
-          <Card className="p-8 text-center text-gray-500 dark:text-gray-400">
-            {searchTerm
-              ? 'Nenalezena žádná hlasování odpovídající vašemu vyhledávání'
-              : 'Zatím nebyla vytvořena žádná hlasování'}
-          </Card>
-        )}
       </div>
     </div>
   );
