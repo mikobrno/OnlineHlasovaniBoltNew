@@ -8,14 +8,20 @@ import { AlertCircle, Lock, Shield, Mail, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 export const LoginForm: FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@onlinesprava.cz');
+  const [password, setPassword] = useState('admin123');
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    await login(email, password);
+    try {
+      console.debug('LoginForm.submit calling login with', { email });
+      const res = await login(email, password);
+      console.debug('LoginForm.submit login result:', res);
+    } catch (err) {
+      console.error('LoginForm.submit login error:', err);
+    }
   };
 
   return (
@@ -46,7 +52,7 @@ export const LoginForm: FC = () => {
                 placeholder="admin@onlinesprava.cz"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                 disabled={isLoading}
                 className="h-12 bg-white/10 border-white/20 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 text-white placeholder:text-indigo-200/50 rounded-xl text-base transition-all duration-200"
                 autoComplete="email"
@@ -66,7 +72,7 @@ export const LoginForm: FC = () => {
                 placeholder="••••••••••"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                 disabled={isLoading}
                 className="h-12 bg-white/10 border-white/20 focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 text-white placeholder:text-indigo-200/50 rounded-xl text-base pr-12 transition-all duration-200"
                 autoComplete="current-password"

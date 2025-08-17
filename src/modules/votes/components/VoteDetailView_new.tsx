@@ -6,9 +6,6 @@ import { Button, Card } from '@/components/common';
 import { getVoteStatusText, getVoteStatusColor } from '@/lib/utils';
 import { FullPageSpinner } from '@/components/FullPageSpinner';
 import { Vote } from '../types';
-import { VoteMembersView } from './VoteMembersView';
-import { VoteObserversView } from './VoteObserversView';
-import { VoteProgressView } from './VoteProgressView';
 
 // GraphQL dotaz pro detail hlasování
 const GET_VOTE_DETAILS_QUERY = gql`
@@ -116,11 +113,11 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
   const renderTabContent = () => {
     switch (activeTab) {
       case 'members':
-        return <VoteMembersView />;
+        return <Card className="p-6"><p>Záložka "Správa členů" bude brzy funkční.</p></Card>;
       case 'observers':
-        return <VoteObserversView vote={vote} />;
+        return <Card className="p-6"><p>Záložka "Pozorovatelé" bude brzy funkční.</p></Card>;
       case 'progress':
-        return <VoteProgressView vote={vote} />;
+        return <Card className="p-6"><p>Záložka "Průběh" bude brzy funkční.</p></Card>;
       case 'results':
         return <Card className="p-6"><p>Záložka "Výsledky" bude brzy funkční.</p></Card>;
       default:

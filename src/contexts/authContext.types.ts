@@ -1,11 +1,12 @@
 import { createContext } from 'react';
-import { useSignInEmailPassword, useSignOut, useUserData } from '@nhost/react';
+import { useUserData, useSignOut } from '@nhost/react';
 
 export interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: ReturnType<typeof useUserData>;
-  login: ReturnType<typeof useSignInEmailPassword>['signInEmailPassword'];
+  // wrapper used in AuthProvider: (email, password) => Promise<unknown>
+  login: (email: string, password: string) => Promise<unknown>;
   logout: ReturnType<typeof useSignOut>['signOut'];
 }
 

@@ -1,5 +1,6 @@
 import React, { useState, ReactNode, useEffect, useRef } from 'react';
 import { useQuery } from '@apollo/client';
+import { useAuth } from './useAuth';
 import { GET_GLOBAL_VARIABLES_QUERY } from '../graphql/globalVariables';
 import type { GlobalVariable } from '../graphql/globalVariables';
 import { ThemeContext, Theme } from './ThemeContextBase.ts';
@@ -23,7 +24,11 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [primaryColor, setPrimaryColor] = useState<string>('#3b82f6');
 
   // Načteme globální proměnné (cache-first stačí; SettingsView je refetchuje při uložení)
-  const { data } = useQuery<{ global_variables: GlobalVariable[] }>(GET_GLOBAL_VARIABLES_QUERY, { fetchPolicy: 'cache-first' });
+  const { isAuthenticated, isLoading } = useAuth();
+  const { data } = useQuery<{ global_variables: GlobalVariable[] }>(GET_GLOBAL_VARIABLES_QUERY, {
+    fetchPolicy: 'cache-first',
+    skip: isLoading || !isAuthenticated,
+  });
 
   // Aplikace tématu do DOM
   useEffect(() => {
