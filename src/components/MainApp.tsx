@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppNavigation } from './AppNavigation';
+import { DashboardView } from './DashboardView';
 import { VotesModule } from '../modules/votes';
 import { MembersView } from './members/MembersView';
 import { SimpleGeneratorView } from './email/SimpleGeneratorView';
@@ -11,10 +12,12 @@ interface MainAppProps {
 }
 
 export const MainApp: React.FC<MainAppProps> = ({ selectedBuilding }) => {
-  const [activeTab, setActiveTab] = useState('votes');
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   const renderActiveView = () => {
     switch (activeTab) {
+      case 'dashboard':
+        return <DashboardView selectedBuilding={selectedBuilding} onNavigate={setActiveTab} />;
       case 'votes':
         return <VotesModule buildingId={selectedBuilding.id} />;
       case 'members':
@@ -24,7 +27,7 @@ export const MainApp: React.FC<MainAppProps> = ({ selectedBuilding }) => {
       case 'admin':
         return <AdminView buildingId={selectedBuilding.id} />;
       default:
-        return <VotesModule buildingId={selectedBuilding.id} />;
+        return <DashboardView selectedBuilding={selectedBuilding} onNavigate={setActiveTab} />;
     }
   };
 

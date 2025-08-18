@@ -28,8 +28,8 @@ export const GET_VOTE_DETAILS = gql`
       created_at
       start_date
       end_date
-  building_id
-  # questions is stored as a JSON/jsonb scalar in the DB. Do not request subfields here
+      building_id
+      # questions is stored as a JSON/jsonb scalar in the DB. Do not request subfields here
       # or GraphQL will raise "unexpected subselection". The component will read the
       # parsed JSON value at runtime (an array of question objects).
       questions
@@ -64,6 +64,19 @@ export const GET_VOTE_DETAILS = gql`
         no_weight
         abstain_weight
       }
+    }
+  }
+`;
+
+export const GET_EMAIL_TEMPLATES = gql`
+  query GetEmailTemplates($buildingId: uuid!) {
+    email_templates(where: { building_id: { _eq: $buildingId } }, order_by: { created_at: desc }) {
+      id
+      name
+      subject
+      body
+      template_type
+      created_at
     }
   }
 `;

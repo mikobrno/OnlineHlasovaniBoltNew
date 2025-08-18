@@ -2,57 +2,38 @@
 import { FC, useState } from 'react';
 import { TrendingUp, Users, Clock, CheckCircle2, ChevronRight, Eye } from 'lucide-react';
 import { Card } from '@/components/common';
-import { Vote } from '../types';
+import { useQuery } from '@apollo/client';
+import { GET_VOTE_DETAILS } from '../graphql/queries';
 
 interface VoteProgressViewProps {
-  vote: Vote;
+  voteId: string;
 }
 
-// Mock progress data
-const mockProgressData = {
-  totalMembers: 120,
-  votedMembers: 87,
-  yesVotes: 52,
-  noVotes: 28,
-  abstainVotes: 7,
-  totalWeight: 145.5,
-  yesWeight: 89.2,
-  noWeight: 42.1,
-  abstainWeight: 14.2,
-  timeline: [
-    { time: '09:00', votes: 15 },
-    { time: '10:00', votes: 28 },
-    { time: '11:00', votes: 42 },
-    { time: '12:00', votes: 56 },
-    { time: '13:00', votes: 71 },
-    { time: '14:00', votes: 84 },
-    { time: '15:00', votes: 87 }
-  ]
-};
 
-// Mock detailed member data
-const mockMemberVotes = [
-  { id: '1', name: 'Jan Novák', unit: 'A1', weight: 1.0, hasVoted: true, voteValue: 'yes', votedAt: '2025-08-17T09:15:00' },
-  { id: '2', name: 'Marie Svobodová', unit: 'B2', weight: 1.5, hasVoted: true, voteValue: 'no', votedAt: '2025-08-17T09:32:00' },
-  { id: '3', name: 'Pavel Dvořák', unit: 'C3', weight: 2.0, hasVoted: false },
-  { id: '4', name: 'Jana Procházková', unit: 'D4', weight: 1.2, hasVoted: true, voteValue: 'abstain', votedAt: '2025-08-17T10:05:00' },
-  { id: '5', name: 'Tomáš Černý', unit: 'A2', weight: 0.8, hasVoted: true, voteValue: 'yes', votedAt: '2025-08-17T11:20:00' },
-  { id: '6', name: 'Petra Nová', unit: 'B1', weight: 1.3, hasVoted: false },
-];
 
-export const VoteProgressView: FC<VoteProgressViewProps> = ({ vote }) => {
+export const VoteProgressView: FC<VoteProgressViewProps> = ({ voteId }) => {
   const [showMemberDetails, setShowMemberDetails] = useState(false);
-  const { totalMembers, votedMembers, yesVotes, noVotes, abstainVotes, totalWeight, yesWeight, noWeight, abstainWeight } = mockProgressData;
-  
-  const participationRate = (votedMembers / totalMembers) * 100;
-  const yesPercentage = (yesVotes / votedMembers) * 100;
-  const noPercentage = (noVotes / votedMembers) * 100;
-  const abstainPercentage = (abstainVotes / votedMembers) * 100;
-  
-  const yesWeightPercentage = (yesWeight / totalWeight) * 100;
-  const noWeightPercentage = (noWeight / totalWeight) * 100;
-
-  const endDate = vote.end_date ? new Date(vote.end_date) : null;
+  const { data, loading, error } = useQuery(GET_VOTE_DETAILS, { variables: { voteId } });
+  if (loading) return <div>Načítám statistiky…</div>;
+  if (error) return <div>Chyba při načítání statistik: {error.message}</div>;
+  const stats = data?.vote?.vote_statistics || {};
+  const memberVotes = data?.vote?.member_votes || [];
+  const totalMembers = stats.total_votes ?? 0;
+  const votedMembers = memberVotes.length;
+  const yesVotes = stats.yes_votes ?? 0;
+  const noVotes = stats.no_votes ?? 0;
+  const abstainVotes = stats.abstain_votes ?? 0;
+  const totalWeight = stats.total_weight ?? 0;
+  const yesWeight = stats.yes_weight ?? 0;
+  const noWeight = stats.no_weight ?? 0;
+  const abstainWeight = stats.abstain_weight ?? 0;
+  const participationRate = totalMembers ? (votedMembers / totalMembers) * 100 : 0;
+  const yesPercentage = votedMembers ? (yesVotes / votedMembers) * 100 : 0;
+  const noPercentage = votedMembers ? (noVotes / votedMembers) * 100 : 0;
+  const abstainPercentage = votedMembers ? (abstainVotes / votedMembers) * 100 : 0;
+  const yesWeightPercentage = totalWeight ? (yesWeight / totalWeight) * 100 : 0;
+  const noWeightPercentage = totalWeight ? (noWeight / totalWeight) * 100 : 0;
+  const endDate = data?.vote?.end_date ? new Date(data.vote.end_date) : null;
   const now = new Date();
   const timeRemaining = endDate ? Math.max(0, endDate.getTime() - now.getTime()) : 0;
   const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
@@ -122,16 +103,8 @@ export const VoteProgressView: FC<VoteProgressViewProps> = ({ vote }) => {
           Průběh hlasování v čase
         </h3>
         <div className="h-64 flex items-end gap-2">
-          {mockProgressData.timeline.map((point, index) => (
-            <div key={index} className="flex-1 flex flex-col items-center">
-              <div 
-                className="w-full bg-blue-500 rounded-t"
-                style={{ height: `${(point.votes / totalMembers) * 200}px` }}
-              ></div>
-              <div className="mt-2 text-xs text-gray-600">{point.time}</div>
-              <div className="text-xs font-semibold text-gray-900">{point.votes}</div>
-            </div>
-          ))}
+          {/* TODO: Pokud budete mít časovou osu v datech, zde ji zobrazte. */}
+          <div className="text-gray-400 italic">Průběh v čase zatím není k dispozici.</div>
         </div>
       </Card>
 
@@ -248,40 +221,24 @@ export const VoteProgressView: FC<VoteProgressViewProps> = ({ vote }) => {
         
         {showMemberDetails && (
           <div className="space-y-3">
-            {mockMemberVotes.map((member) => (
+            {memberVotes.map((mv: { id: string; member?: { name?: string; unit?: string; weight?: number }; vote_choice?: 'yes' | 'no' | 'abstain' }) => (
               <div 
-                key={member.id}
+                key={mv.id}
                 className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                onClick={() => console.log('Show member detail:', member)}
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-sm font-medium">
-                    {member.name.split(' ').map(n => n[0]).join('')}
+                    {mv.member?.name?.split(' ').map((n) => n[0]).join('')}
                   </div>
                   <div>
-                    <div className="font-medium text-gray-900">{member.name}</div>
-                    <div className="text-sm text-gray-500">Jednotka {member.unit} • Váha {member.weight}</div>
+                    <div className="font-medium text-gray-900">{mv.member?.name}</div>
+                    <div className="text-sm text-gray-500">Jednotka {mv.member?.unit} • Váha {mv.member?.weight ?? '-'}</div>
                   </div>
                 </div>
-                
                 <div className="flex items-center gap-3">
-                  {member.hasVoted ? (
-                    <>
-                      <div className="text-right">
-                        <div className={`text-sm font-medium ${
-                          member.voteValue === 'yes' ? 'text-green-600' : 
-                          member.voteValue === 'no' ? 'text-red-600' : 'text-gray-600'
-                        }`}>
-                          {member.voteValue === 'yes' ? 'Pro' : member.voteValue === 'no' ? 'Proti' : 'Zdržel se'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(member.votedAt!).toLocaleString('cs-CZ')}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-sm text-gray-500">Nehlasoval</div>
-                  )}
+                  <div className={`text-sm font-medium ${mv.vote_choice === 'yes' ? 'text-green-600' : mv.vote_choice === 'no' ? 'text-red-600' : 'text-gray-600'}`}>
+                    {mv.vote_choice === 'yes' ? 'Pro' : mv.vote_choice === 'no' ? 'Proti' : mv.vote_choice === 'abstain' ? 'Zdržel se' : 'Nehlasoval'}
+                  </div>
                   <ChevronRight className="w-4 h-4 text-gray-400" />
                 </div>
               </div>

@@ -2,8 +2,13 @@
 import { FC, useState } from 'react';
 import { Users, Plus, Search, Mail, Phone, Vote as VoteIcon, FileText, CheckCircle, X, Upload, AlertCircle } from 'lucide-react';
 import { Card } from '@/components/common';
+import { useQuery } from '@apollo/client';
+import { GET_VOTE_DETAILS } from '@/graphql/queries';
 
-type VoteMembersViewProps = Record<string, never>;
+interface VoteMembersViewProps {
+  voteId: string;
+  buildingId: string;
+}
 
 interface Member {
   id: string;
@@ -15,81 +20,50 @@ interface Member {
   hasVoted: boolean;
   voteValue?: 'yes' | 'no' | 'abstain';
   hasProxy?: boolean;
-  proxyFrom?: string; // jméno člena, za kterého hlasuje
-  proxyDocument?: string; // URL dokumentu plné moci
+  proxyFrom?: string;
+  proxyDocument?: string;
 }
 
-// Mock data - v produkci by se načítala z API
-const mockMembers: Member[] = [
-  {
-    id: '1',
-    name: 'Jan Novák',
-    email: 'jan.novak@email.cz',
-    phone: '+420 123 456 789',
-    unit: 'A1',
-    weight: 1.0,
-    hasVoted: true,
-    voteValue: 'yes'
-  },
-  {
-    id: '2',
-    name: 'Marie Svobodová',
-    email: 'marie.svobodova@email.cz',
-    unit: 'B2',
-    weight: 1.5,
-    hasVoted: false
-  },
-  {
-    id: '3',
-    name: 'Pavel Dvořák',
-    email: 'pavel.dvorak@email.cz',
-    phone: '+420 987 654 321',
-    unit: 'C3',
-    weight: 2.0,
-    hasVoted: true,
-    voteValue: 'no',
-    hasProxy: true,
-    proxyFrom: 'Helena Dvořáková',
-    proxyDocument: '/uploads/proxy-dvorak.pdf'
-  },
-  {
-    id: '4',
-    name: 'Tomáš Černý',
-    email: 'tomas.cerny@email.cz',
-    unit: 'D4',
-    weight: 0.8,
-    hasVoted: false
-  }
-];
 
-export const VoteMembersView: FC<VoteMembersViewProps> = () => {
+
+
+export const VoteMembersView: FC<VoteMembersViewProps> = ({ voteId, buildingId }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'voted' | 'not-voted'>('all');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
-  // Mock otázky k hlasování
-  const voteQuestions = [
-    {
-      id: 1,
-      text: "Schvalujete návrh změny společných částí domu?"
-    },
-    {
-      id: 2, 
-      text: "Souhlasíte s navýšením příspěvků na opravy?"
-    }
-  ];
+  // Načtení členů a hlasů z GraphQL
+  const { data, loading, error } = useQuery(GET_VOTE_DETAILS, {
+    variables: { voteId, buildingId },
+    fetchPolicy: 'cache-and-network',
+  });
 
-  const filteredMembers = mockMembers.filter(member => {
+  // Mapování členů a hlasů na původní strukturu
+  type GqlMember = { id: string; name: string; email: string; phone?: string; unit: string; vote_weight?: number };
+  type GqlMemberVote = { member_id: string; answer?: 'yes' | 'no' | 'abstain' };
+  const members: Member[] = (data?.members || []).map((m: GqlMember) => {
+    const memberVote = data?.member_votes_aggregate?.nodes?.find((v: GqlMemberVote) => v.member_id === m.id);
+    return {
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      phone: m.phone,
+      unit: m.unit,
+      weight: m.vote_weight ?? 1,
+      hasVoted: !!memberVote,
+      voteValue: memberVote?.answer ?? undefined,
+    };
+  });
+
+  const filteredMembers = members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         member.unit.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesFilter = filter === 'all' || 
-                         (filter === 'voted' && member.hasVoted) ||
-                         (filter === 'not-voted' && !member.hasVoted);
-    
+      member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.unit.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter = filter === 'all' ||
+      (filter === 'voted' && member.hasVoted) ||
+      (filter === 'not-voted' && !member.hasVoted);
     return matchesSearch && matchesFilter;
   });
 
@@ -131,9 +105,12 @@ export const VoteMembersView: FC<VoteMembersViewProps> = () => {
     }
   };
 
-  const votedCount = mockMembers.filter(m => m.hasVoted).length;
-  const totalWeight = mockMembers.reduce((sum, m) => sum + m.weight, 0);
-  const votedWeight = mockMembers.filter(m => m.hasVoted).reduce((sum, m) => sum + m.weight, 0);
+  const votedCount = members.filter(m => m.hasVoted).length;
+  const totalWeight = members.reduce((sum, m) => sum + m.weight, 0);
+  const votedWeight = members.filter(m => m.hasVoted).reduce((sum, m) => sum + m.weight, 0);
+
+  if (loading) return <div>Načítám členy…</div>;
+  if (error) return <div>Chyba při načítání členů: {error.message}</div>;
 
   return (
     <div className="space-y-6">

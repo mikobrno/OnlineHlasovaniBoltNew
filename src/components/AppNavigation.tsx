@@ -1,5 +1,5 @@
 import React from 'react';
-import { Vote, Users, Mail, Settings } from 'lucide-react';
+import { Home, Vote, Users, Mail, Settings } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface NavigationTab {
@@ -14,6 +14,7 @@ interface AppNavigationProps {
 }
 
 const tabs: NavigationTab[] = [
+  { id: 'dashboard', label: 'Přehled', icon: <Home className="w-4 h-4" /> },
   { id: 'votes', label: 'Hlasování', icon: <Vote className="w-4 h-4" /> },
   { id: 'members', label: 'Členové', icon: <Users className="w-4 h-4" /> },
   { id: 'emails', label: 'E-maily', icon: <Mail className="w-4 h-4" /> },

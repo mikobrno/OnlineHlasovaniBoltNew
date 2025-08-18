@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, Mail, Bell, FileText, Users } from 'lucide-react';
 import { PageHeader } from '../common/PageHeader';
 import { Card } from '../common/Card';
 import { Button } from '../common/Button';
@@ -14,10 +14,53 @@ import { type EmailTemplate } from '../../graphql/templates';
 import { type Member } from '../../graphql/members';
 import { type GlobalVariable } from '../../graphql/globalVariables';
 import { type Building } from '../../graphql/buildings';
+import { cn } from '../../lib/utils';
 
 interface SimpleGeneratorViewProps {
   buildingId: string;
 }
+
+type EmailCategory = 'all' | 'invitation' | 'reminder' | 'ballot' | 'notification';
+
+interface CategoryTab {
+  id: EmailCategory;
+  label: string;
+  icon: React.ReactNode;
+  description: string;
+}
+
+const emailCategories: CategoryTab[] = [
+  {
+    id: 'all',
+    label: 'Všechny',
+    icon: <Mail className="w-4 h-4" />,
+    description: 'Zobrazit všechny e-mailové šablony'
+  },
+  {
+    id: 'invitation',
+    label: 'Pozvánky',
+    icon: <Users className="w-4 h-4" />,
+    description: 'Pozvánky k hlasování'
+  },
+  {
+    id: 'reminder',
+    label: 'Připomínky',
+    icon: <Bell className="w-4 h-4" />,
+    description: 'Připomenutí hlasování'
+  },
+  {
+    id: 'ballot',
+    label: 'Hlasovací lístky',
+    icon: <FileText className="w-4 h-4" />,
+    description: 'Hlasovací lístky s otázkami'
+  },
+  {
+    id: 'notification',
+    label: 'Oznámení',
+    icon: <Mail className="w-4 h-4" />,
+    description: 'Obecná oznámení a informace'
+  }
+];
 
 export const SimpleGeneratorView: React.FC<SimpleGeneratorViewProps> = ({
   buildingId,
@@ -30,6 +73,7 @@ export const SimpleGeneratorView: React.FC<SimpleGeneratorViewProps> = ({
     msg: string;
   } | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<EmailCategory>('all');
 
   const { data, loading, error } = useQuery(GET_EMAIL_GENERATOR_DATA, {
     variables: { buildingId },
@@ -45,6 +89,34 @@ export const SimpleGeneratorView: React.FC<SimpleGeneratorViewProps> = ({
   const globalVariables: GlobalVariable[] = data?.global_variables || [];
   const selectedBuilding: Building | undefined = data?.buildings_by_pk;
 
+  // Filtrování šablon podle kategorie
+  const getTemplatesByCategory = (category: EmailCategory) => {
+    if (category === 'all') return availableTemplates;
+    
+    return availableTemplates.filter(template => {
+      const name = template.name?.toLowerCase() || '';
+      const subject = template.subject?.toLowerCase() || '';
+      
+      switch (category) {
+        case 'invitation':
+          return name.includes('pozvánka') || name.includes('invitation') || 
+                 subject.includes('pozvánka') || subject.includes('invitation');
+        case 'reminder':
+          return name.includes('připomínka') || name.includes('reminder') || 
+                 subject.includes('připomínka') || subject.includes('reminder');
+        case 'ballot':
+          return name.includes('lístek') || name.includes('ballot') || name.includes('hlasování') ||
+                 subject.includes('lístek') || subject.includes('ballot') || subject.includes('hlasování');
+        case 'notification':
+          return name.includes('oznámení') || name.includes('notification') || name.includes('info') ||
+                 subject.includes('oznámení') || subject.includes('notification');
+        default:
+          return true;
+      }
+    });
+  };
+
+  const filteredTemplates = getTemplatesByCategory(activeCategory);
   const selectedTemplate = availableTemplates.find(
     t => t.id === selectedTemplateId
   );
@@ -57,22 +129,36 @@ export const SimpleGeneratorView: React.FC<SimpleGeneratorViewProps> = ({
   }, [buildingId, buildingMembers.length]);
 
   const generatedSubject =
-    selectedTemplate && currentMember && selectedBuilding
+    selectedTemplate && currentMember && selectedBuilding && currentMember.id
       ? replaceVariables(
           selectedTemplate.subject,
           globalVariables,
-          selectedBuilding,
-          currentMember
+          { 
+            ...selectedBuilding, 
+            variables: selectedBuilding.variables 
+              ? Object.fromEntries(
+                  Object.entries(selectedBuilding.variables).map(([k, v]) => [k, String(v || '')])
+                ) 
+              : {} 
+          },
+          currentMember as Required<Member>
         )
       : '';
 
   const generatedBody =
-    selectedTemplate && currentMember && selectedBuilding
+    selectedTemplate && currentMember && selectedBuilding && currentMember.id
       ? replaceVariables(
           selectedTemplate.body,
           globalVariables,
-          selectedBuilding,
-          currentMember
+          { 
+            ...selectedBuilding, 
+            variables: selectedBuilding.variables 
+              ? Object.fromEntries(
+                  Object.entries(selectedBuilding.variables).map(([k, v]) => [k, String(v || '')])
+                ) 
+              : {} 
+          },
+          currentMember as Required<Member>
         )
       : '';
 
@@ -163,6 +249,42 @@ export const SimpleGeneratorView: React.FC<SimpleGeneratorViewProps> = ({
         subtitle="Rychlé generování personalizovaných e-mailů ze šablon"
       />
 
+      {/* Záložky pro kategorie e-mailů */}
+      <Card className="p-4 mb-6">
+        <div className="flex flex-wrap gap-2">
+          {emailCategories.map((category) => (
+            <button
+              key={category.id}
+              onClick={() => {
+                setActiveCategory(category.id);
+                setSelectedTemplateId(''); // Reset výběru při změně kategorie
+              }}
+              className={cn(
+                'flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                activeCategory === category.id
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+              )}
+              title={category.description}
+            >
+              {category.icon}
+              <span>{category.label}</span>
+              <span className="text-xs opacity-75">
+                ({getTemplatesByCategory(category.id).length})
+              </span>
+            </button>
+          ))}
+        </div>
+        
+        {activeCategory !== 'all' && (
+          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+            <p className="text-sm text-blue-800 dark:text-blue-200">
+              📧 {emailCategories.find(c => c.id === activeCategory)?.description}
+            </p>
+          </div>
+        )}
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-6">
           <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
@@ -186,6 +308,11 @@ export const SimpleGeneratorView: React.FC<SimpleGeneratorViewProps> = ({
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
               >
                 E-mailová šablona
+                {activeCategory !== 'all' && (
+                  <span className="text-xs text-gray-500 ml-2">
+                    (kategorie: {emailCategories.find(c => c.id === activeCategory)?.label})
+                  </span>
+                )}
               </label>
               <select
                 id="email-template-select"
@@ -193,13 +320,21 @@ export const SimpleGeneratorView: React.FC<SimpleGeneratorViewProps> = ({
                 onChange={e => setSelectedTemplateId(e.target.value)}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">Vyberte šablonu</option>
-                {availableTemplates.map(template => (
+                <option value="">
+                  {filteredTemplates.length > 0 ? 'Vyberte šablonu' : 'Žádné šablony v této kategorii'}
+                </option>
+                {filteredTemplates.map(template => (
                   <option key={template.id} value={template.id}>
                     {template.name} {template.is_global ? '(Globální)' : ''}
                   </option>
                 ))}
               </select>
+              
+              {filteredTemplates.length === 0 && activeCategory !== 'all' && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Pro tuto kategorii nejsou k dispozici žádné šablony. Zkuste jinou kategorii nebo "Všechny".
+                </p>
+              )}
             </div>
 
             {selectedTemplate && (

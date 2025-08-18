@@ -117,11 +117,11 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
   const renderTabContent = () => {
     switch (activeTab) {
       case 'members':
-        return <VoteMembersView />;
+        return <VoteMembersView voteId={vote.id} buildingId={vote.building_id} />;
       case 'observers':
         return <VoteObserversView vote={vote} />;
       case 'progress':
-        return <VoteProgressView vote={vote} />;
+        return <VoteProgressView voteId={vote.id} />;
       case 'results':
         return <Card className="p-6"><p>Záložka "Výsledky" bude brzy funkční.</p></Card>;
       default:
