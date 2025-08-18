@@ -16,24 +16,10 @@ import { nhost, apolloClient } from './lib/apolloClient';
 const Bootstrap: React.FC = () => {
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    try {
-      // Pokud nejsou klíče (nebo jsou ale prázdné), není co dělat
-      const stored = localStorage.getItem('nhostRefreshToken');
-      // Pokusíme se jen ověřit synchronně – nemáme session API bez provideru, takže heuristika:
-      if (!stored) {
-        // nic
-      } else {
-        // Často zůstává zastaralý refresh token => smažeme a necháme čistý start
-        localStorage.removeItem('nhostRefreshToken');
-        localStorage.removeItem('nhostRefreshTokenExpiresAt');
-        localStorage.removeItem('nhostAnonymousUsersEnabled');
-      }
-  } catch {
-      // ignore
-    }
+    // Jednoduše nastavíme ready na true bez mazání localStorage
     setReady(true);
   }, []);
-  if (!ready) return null; // krátké prázdné okno (ms) – lze nahradit spinnerem pokud vadí
+  if (!ready) return null;
   return (
     <NhostProvider nhost={nhost}>
       <AuthProvider>

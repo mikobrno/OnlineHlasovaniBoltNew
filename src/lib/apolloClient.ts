@@ -3,7 +3,6 @@ import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 import { nhost } from './nhostClient';
-import { isAuthReady } from './authSessionFlag';
 
 const httpLink = createHttpLink({
   uri: nhost.graphql.getUrl(),
@@ -16,23 +15,13 @@ const authLink = setContext(async (operation: any, { headers }: { headers?: Reco
   const ctx = (operation && operation.context) || {};
   if (ctx && ctx.skipAuth) return { headers: { ...headers } };
 
-  // Skip all token logic until auth layer declares readiness
-  if (!isAuthReady()) {
-    return { headers: { ...headers } };
-  }
-
   let token = '';
   try {
     const authAny = (nhost as any).auth;
-  if (authAny && typeof authAny.getUser === 'function') {
-  // debug: zjistit, zda se volá getUser (dočasné, pomůže lokalizovat zdroj /v1/token volání)
-  console.debug('[Apollo][AuthLink] calling nhost.auth.getUser()');
-  const user = await authAny.getUser();
-  console.debug('[Apollo][AuthLink] nhost.auth.getUser() ->', !!user);
+    if (authAny && typeof authAny.getUser === 'function') {
+      const user = await authAny.getUser();
       if (user) {
-  console.debug('[Apollo][AuthLink] requesting access token');
-  token = (await nhost.auth.getAccessToken()) || '';
-  console.debug('[Apollo][AuthLink] got token length', token ? token.length : 0);
+        token = (await nhost.auth.getAccessToken()) || '';
       }
     }
   } catch {

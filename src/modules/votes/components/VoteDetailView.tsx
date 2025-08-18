@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { ArrowLeft, Edit, Play, FileText, Mail, Eye, BarChart3, AlertCircle } from 'lucide-react';
 import { useQuery, gql } from '@apollo/client';
 import { Button, Card } from '@/components/common';
+import { ReadOnlyAlert } from '@/components/common/ReadOnlyAlert';
 import { getVoteStatusText, getVoteStatusColor } from '@/lib/utils';
 import { FullPageSpinner } from '@/components/FullPageSpinner';
 import { Vote } from '../types';
@@ -128,23 +129,16 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
           <div className="space-y-6">
             {/* Informační panel o stavu editovatelnosti */}
             {vote.status !== 'draft' && vote.status !== 'scheduled' && (
-              <Card className="p-4 border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-500">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
-                  <div>
-                    <h4 className="font-medium text-amber-800 dark:text-amber-200 mb-1">
-                      Hlasování je v režimu pouze pro čtení
-                    </h4>
-                    <p className="text-sm text-amber-700 dark:text-amber-300">
-                      {vote.status === 'active' && 'Hlasování právě probíhá, změny nejsou možné.'}
-                      {vote.status === 'closed' && 'Hlasování bylo ukončeno, změny nejsou možné.'}
-                      {vote.status === 'cancelled' && 'Hlasování bylo zrušeno, změny nejsou možné.'}
-                      {!['active', 'closed', 'cancelled'].includes(vote.status) && 'Hlasování nelze upravovat v současném stavu.'}
-                      {' '}Můžete si prohlédnout všechny detaily včetně otázek.
-                    </p>
-                  </div>
-                </div>
-              </Card>
+              <ReadOnlyAlert
+                message="Hlasování je v režimu pouze pro čtení"
+                description={
+                  (vote.status === 'active' && 'Hlasování právě probíhá, změny nejsou možné.') ||
+                  (vote.status === 'closed' && 'Hlasování bylo ukončeno, změny nejsou možné.') ||
+                  (vote.status === 'cancelled' && 'Hlasování bylo zrušeno, změny nejsou možné.') ||
+                  (!['active', 'closed', 'cancelled'].includes(vote.status) && 'Hlasování nelze upravovat v současném stavu.') +
+                  ' Můžete si prohlédnout všechny detaily včetně otázek.'
+                }
+              />
             )}
 
             <Card className="p-6">
