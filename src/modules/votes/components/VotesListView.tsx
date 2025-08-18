@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Plus, Search, Vote as VoteIcon, Clock, Users, CheckCircle } from 'lucide-react';
-import { useQuery, gql } from '@apollo/client';
+import { useQuery } from '@apollo/client';
 import { useApp } from '@/contexts';
 import { Input, Card } from '@/components/common';
 import { VoteCard } from './VoteCard';
@@ -10,19 +10,7 @@ import { VoteDetailView } from './VoteDetailView';
 import { VoteFormView } from './';
 import { FullPageSpinner } from '../../../components/FullPageSpinner';
 import type { Vote } from '../types';
-
-const GET_VOTES_QUERY = gql`
-  query GetVotes($buildingId: uuid!) {
-    votes(where: { building_id: { _eq: $buildingId } }, order_by: { created_at: desc }) {
-      id
-      title
-      status
-      created_at
-      start_date
-      end_date
-    }
-  }
-`;
+import { GET_VOTES_QUERY } from './queries';
 
 export const VotesListView: React.FC = () => {
   const { selectedBuilding } = useApp();
@@ -208,3 +196,5 @@ export const VotesListView: React.FC = () => {
     </div>
   );
 };
+
+export { GET_VOTES_QUERY };

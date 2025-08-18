@@ -8,6 +8,8 @@ export interface AuthContextType {
   // wrapper used in AuthProvider: (email, password) => Promise<unknown>
   login: (email: string, password: string) => Promise<unknown>;
   logout: ReturnType<typeof useSignOut>['signOut'];
+  register: (email: string, password: string) => Promise<unknown>;
+  resetUserPassword: (email: string) => Promise<unknown>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

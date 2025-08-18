@@ -4,6 +4,7 @@ import { Eye, Plus, Search, Mail, UserCheck, Edit, Trash2, RotateCcw } from 'luc
 import { Card } from '@/components/common';
 import { Vote } from '../types';
 import { ObserverModal } from './ObserverModal';
+import { useQuery, useMutation, gql } from '@apollo/client';
 
 interface VoteObserversViewProps {
   vote: Vote;
@@ -14,48 +15,60 @@ interface Observer {
   name: string;
   email: string;
   role: 'auditor' | 'observer' | 'legal';
-  addedDate: string;
+  added_date: string;
   status: 'invited' | 'confirmed' | 'declined';
 }
 
-// Mock data
-const mockObservers: Observer[] = [
-  {
-    id: '1',
-    name: 'Ing. Jana Procházková',
-    email: 'jana.prochazkova@audit.cz',
-    role: 'auditor',
-    addedDate: '2025-08-15',
-    status: 'confirmed'
-  },
-  {
-    id: '2',
-    name: 'JUDr. Martin Svoboda',
-    email: 'martin.svoboda@legal.cz',
-    role: 'legal',
-    addedDate: '2025-08-16',
-    status: 'invited'
-  },
-  {
-    id: '3',
-    name: 'Petr Novotný',
-    email: 'petr.novotny@email.cz',
-    role: 'observer',
-    addedDate: '2025-08-14',
-    status: 'confirmed'
+// GraphQL queries and mutations
+const GET_OBSERVERS_QUERY = gql`
+  query GetObservers($voteId: uuid!) {
+    observers(where: { vote_id: { _eq: $voteId } }) {
+      id
+      name
+      email
+      role
+      added_date
+      status
+    }
   }
-];
+`;
+
+const ADD_OBSERVER_MUTATION = gql`
+  mutation AddObserver($input: ObserverInput!) {
+    insert_observers_one(object: $input) {
+      id
+    }
+  }
+`;
+
+const UPDATE_OBSERVER_MUTATION = gql`
+  mutation UpdateObserver($id: uuid!, $input: ObserverInput!) {
+    update_observers_by_pk(pk_columns: { id: $id }, _set: $input) {
+      id
+    }
+  }
+`;
+
+const REMOVE_OBSERVER_MUTATION = gql`
+  mutation RemoveObserver($id: uuid!) {
+    delete_observers_by_pk(id: $id) {
+      id
+    }
+  }
+`;
 
 export const VoteObserversView: FC<VoteObserversViewProps> = ({ vote }) => {
+  const { data, loading, error } = useQuery(GET_OBSERVERS_QUERY, {
+    variables: { voteId: vote.id },
+  });
+
+  const [addObserver] = useMutation(ADD_OBSERVER_MUTATION);
+  const [updateObserver] = useMutation(UPDATE_OBSERVER_MUTATION);
+  const [removeObserver] = useMutation(REMOVE_OBSERVER_MUTATION);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingObserver, setEditingObserver] = useState<Observer | null>(null);
-  const [observers, setObservers] = useState<Observer[]>(mockObservers);
-
-  const filteredObservers = observers.filter(observer =>
-    observer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    observer.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const handleResendInvitation = async (observerId: string) => {
     const observer = observers.find(o => o.id === observerId);
@@ -83,8 +96,7 @@ export const VoteObserversView: FC<VoteObserversViewProps> = ({ vote }) => {
     const observer = observers.find(o => o.id === observerId);
     if (observer && window.confirm(`Opravdu chcete odebrat pozorovatele ${observer.name}?`)) {
       try {
-        // TODO: Implementovat GraphQL mutaci pro odebrání pozorovatele
-        setObservers(prev => prev.filter(o => o.id !== observerId));
+        await removeObserver({ variables: { id: observerId } });
         alert(`Pozorovatel ${observer.name} byl odebrán`);
       } catch (error) {
         console.error('Chyba při odebírání pozorovatele:', error);
@@ -101,23 +113,29 @@ export const VoteObserversView: FC<VoteObserversViewProps> = ({ vote }) => {
   const handleSaveObserver = async (data: { name: string; email: string; role: string }) => {
     try {
       if (editingObserver) {
-        // Aktualizace existujícího pozorovatele
-        setObservers(prev => prev.map(o => 
-          o.id === editingObserver.id 
-            ? { ...o, name: data.name, email: data.email, role: data.role as Observer['role'] }
-            : o
-        ));
+        await updateObserver({
+          variables: {
+            id: editingObserver.id,
+            input: {
+              name: data.name,
+              email: data.email,
+              role: data.role,
+            },
+          },
+        });
       } else {
-        // Přidání nového pozorovatele
-        const newObserver: Observer = {
-          id: Date.now().toString(),
-          name: data.name,
-          email: data.email,
-          role: data.role as Observer['role'],
-          addedDate: new Date().toISOString().split('T')[0],
-          status: 'invited'
-        };
-        setObservers(prev => [...prev, newObserver]);
+        await addObserver({
+          variables: {
+            input: {
+              name: data.name,
+              email: data.email,
+              role: data.role,
+              vote_id: vote.id,
+              added_date: new Date().toISOString(),
+              status: 'invited',
+            },
+          },
+        });
       }
     } catch (error) {
       console.error('Chyba při ukládání pozorovatele:', error);
@@ -165,7 +183,21 @@ export const VoteObserversView: FC<VoteObserversViewProps> = ({ vote }) => {
     );
   };
 
+  const observers: Observer[] = data?.observers || [];
+
+  const filteredObservers: Observer[] = observers.filter(observer =>
+    observer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    observer.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   const confirmedCount = observers.filter(o => o.status === 'confirmed').length;
+
+  const renderObserverAddedDate = (observer: Observer) => {
+    return `Přidán ${new Date(observer.added_date).toLocaleDateString('cs-CZ')}`;
+  };
+
+  if (loading) return <div>Načítám pozorovatele...</div>;
+  if (error) return <div>Chyba při načítání pozorovatelů: {error.message}</div>;
 
   return (
     <div className="space-y-6">
@@ -248,7 +280,7 @@ export const VoteObserversView: FC<VoteObserversViewProps> = ({ vote }) => {
                     {observer.email}
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Přidán {new Date(observer.addedDate).toLocaleDateString('cs-CZ')}
+                    {renderObserverAddedDate(observer)}
                   </p>
                 </div>
                 <div className="flex gap-2">

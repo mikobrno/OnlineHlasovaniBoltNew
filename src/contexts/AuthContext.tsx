@@ -5,6 +5,8 @@ import {
   useUserData,
   useSignInEmailPassword,
   useSignOut,
+  useSignUpEmailPassword,
+  useResetPassword,
 } from '@nhost/react';
 import { AuthContext } from './authContext.types';
 
@@ -13,6 +15,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const user = useUserData();
   const { signInEmailPassword } = useSignInEmailPassword();
   const signOutHook = useSignOut();
+  const { signUpEmailPassword } = useSignUpEmailPassword();
+  const { resetPassword } = useResetPassword();
 
   const login = async (email: string, password: string) => {
     try {
@@ -29,6 +33,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = signOutHook.signOut;
 
+  const register = async (email: string, password: string) => {
+    try {
+      const res = await signUpEmailPassword(email, password);
+      if (res.error) {
+        throw new Error(res.error.message);
+      }
+      return res;
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw error;
+    }
+  };
+
+  const resetUserPassword = async (email: string) => {
+    try {
+      const res = await resetPassword(email);
+      if (res.error) {
+        throw new Error(res.error.message);
+      }
+      return res;
+    } catch (error) {
+      console.error('Password reset error:', error);
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       isAuthenticated,
@@ -36,6 +66,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       user,
       login,
       logout,
+      register,
+      resetUserPassword,
     }}>
       {children}
     </AuthContext.Provider>
