@@ -1,6 +1,6 @@
 // src/modules/votes/components/VoteMembersView.tsx
 import { FC, useState } from 'react';
-import { Users, Plus, Search, Mail, Phone, Vote as VoteIcon, FileText, CheckCircle } from 'lucide-react';
+import { Users, Plus, Search, Mail, Phone, Vote as VoteIcon, FileText, CheckCircle, X, Upload, AlertCircle } from 'lucide-react';
 import { Card } from '@/components/common';
 
 type VoteMembersViewProps = Record<string, never>;
@@ -65,6 +65,21 @@ const mockMembers: Member[] = [
 export const VoteMembersView: FC<VoteMembersViewProps> = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState<'all' | 'voted' | 'not-voted'>('all');
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [showVoteModal, setShowVoteModal] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+
+  // Mock otázky k hlasování
+  const voteQuestions = [
+    {
+      id: 1,
+      text: "Schvalujete návrh změny společných částí domu?"
+    },
+    {
+      id: 2, 
+      text: "Souhlasíte s navýšením příspěvků na opravy?"
+    }
+  ];
 
   const filteredMembers = mockMembers.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -81,6 +96,22 @@ export const VoteMembersView: FC<VoteMembersViewProps> = () => {
   const handleVoteForMember = (memberId: string, voteValue: 'yes' | 'no' | 'abstain') => {
     console.log(`Hlasování za člena ${memberId}: ${voteValue}`);
     // TODO: Implementovat GraphQL mutaci pro hlasování za člena
+    setShowVoteModal(false);
+    setSelectedMember(null);
+  };
+
+  const handleMemberClick = (member: Member) => {
+    if (!member.hasVoted) {
+      setSelectedMember(member);
+      setShowVoteModal(true);
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setUploadedFile(file);
+    }
   };
 
   const getVoteStatusBadge = (member: Member) => {
@@ -191,10 +222,26 @@ export const VoteMembersView: FC<VoteMembersViewProps> = () => {
             </thead>
             <tbody>
               {filteredMembers.map((member) => (
-                <tr key={member.id} className="border-b border-gray-100 hover:bg-gray-50">
+                <tr 
+                  key={member.id} 
+                  className={`border-b border-gray-100 transition-colors ${
+                    !member.hasVoted 
+                      ? 'hover:bg-blue-50 cursor-pointer' 
+                      : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => handleMemberClick(member)}
+                  title={!member.hasVoted ? 'Klikněte pro ruční hlasování za tohoto člena' : ''}
+                >
                   <td className="py-4 px-4">
                     <div>
-                      <div className="font-medium text-gray-900">{member.name}</div>
+                      <div className="font-medium text-gray-900 flex items-center gap-2">
+                        {member.name}
+                        {!member.hasVoted && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                            Klikněte pro hlasování
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-4 text-sm text-gray-500">
                         <div className="flex items-center gap-1">
                           <Mail className="w-3 h-3" />
@@ -213,7 +260,13 @@ export const VoteMembersView: FC<VoteMembersViewProps> = () => {
                   <td className="py-4 px-4 text-gray-900">{member.weight.toFixed(1)}</td>
                   <td className="py-4 px-4">{getVoteStatusBadge(member)}</td>
                   <td className="py-4 px-4 text-right">
-                    <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                    <button 
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Zde by byla logika pro úpravu člena
+                      }}
+                    >
                       Upravit
                     </button>
                   </td>
@@ -355,6 +408,146 @@ export const VoteMembersView: FC<VoteMembersViewProps> = () => {
           </div>
         </div>
       </Card>
+
+      {/* Modal pro ruční hlasování */}
+      {showVoteModal && selectedMember && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                  Ruční hlasování za člena
+                </h3>
+                <button 
+                  onClick={() => setShowVoteModal(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                  title="Zavřít"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-l-4 border-blue-400">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1">
+                      Hlasování na základě plné moci
+                    </h4>
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      Můžete hlasovat za tohoto člena pouze pokud máte platnou plnou moc. 
+                      Prosím nahrajte naskenovaný dokument plné moci před odevzdáním hlasu.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-2">Hlasování za:</h4>
+                <div className="text-sm text-gray-600 dark:text-gray-300">
+                  <p className="font-medium">{selectedMember.name}</p>
+                  <p>{selectedMember.email}</p>
+                  <p>Jednotka: {selectedMember.unit} • Váha hlasu: {selectedMember.weight.toFixed(1)}</p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Otázky k hlasování:</h4>
+                <div className="space-y-4">
+                  {voteQuestions.map((question) => (
+                    <div key={question.id} className="p-4 border border-gray-200 dark:border-gray-600 rounded-lg">
+                      <p className="text-gray-900 dark:text-gray-100 mb-3">{question.text}</p>
+                      <div className="flex gap-3">
+                        <button 
+                          onClick={() => handleVoteForMember(selectedMember.id, 'yes')}
+                          className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <CheckCircle size={16} />
+                          PRO
+                        </button>
+                        <button 
+                          onClick={() => handleVoteForMember(selectedMember.id, 'no')}
+                          className="flex-1 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <X size={16} />
+                          PROTI
+                        </button>
+                        <button 
+                          onClick={() => handleVoteForMember(selectedMember.id, 'abstain')}
+                          className="flex-1 bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                        >
+                          ZDRŽEL SE
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Nahrání plné moci</h4>
+                <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                  {uploadedFile ? (
+                    <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400">
+                      <FileText size={20} />
+                      <span>Nahráno: {uploadedFile.name}</span>
+                      <button 
+                        onClick={() => setUploadedFile(null)}
+                        className="text-red-500 hover:text-red-700 ml-2"
+                        title="Odstranit soubor"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="mx-auto text-gray-400 dark:text-gray-500 mb-3" size={32} />
+                      <p className="text-gray-600 dark:text-gray-400 mb-3">
+                        Přetáhněte soubor sem nebo klikněte pro výběr
+                      </p>
+                      <input 
+                        type="file" 
+                        accept=".pdf,.jpg,.jpeg,.png" 
+                        className="hidden" 
+                        id="proxy-upload-modal"
+                        onChange={handleFileUpload}
+                      />
+                      <label 
+                        htmlFor="proxy-upload-modal"
+                        className="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 cursor-pointer"
+                      >
+                        Vybrat soubor plné moci
+                      </label>
+                    </>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                  Podporované formáty: PDF, JPG, PNG (max. 10MB)
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-600">
+                <button 
+                  onClick={() => setShowVoteModal(false)}
+                  className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+                >
+                  Zrušit
+                </button>
+                <button 
+                  disabled={!uploadedFile}
+                  className={`flex-1 px-4 py-2 rounded-lg transition-colors ${
+                    uploadedFile 
+                      ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {uploadedFile ? 'Pokračovat v hlasování' : 'Nejdříve nahrajte plnou moc'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

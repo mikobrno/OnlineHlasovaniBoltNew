@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState } from 'react';
-import { ArrowLeft, Edit, Play, FileText, Mail, Eye, BarChart3 } from 'lucide-react';
+import { ArrowLeft, Edit, Play, FileText, Mail, Eye, BarChart3, AlertCircle } from 'lucide-react';
 import { useQuery, gql } from '@apollo/client';
 import { Button, Card } from '@/components/common';
 import { getVoteStatusText, getVoteStatusColor } from '@/lib/utils';
@@ -126,6 +126,27 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
       default:
         return (
           <div className="space-y-6">
+            {/* Informační panel o stavu editovatelnosti */}
+            {vote.status !== 'draft' && vote.status !== 'scheduled' && (
+              <Card className="p-4 border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-500">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-amber-800 dark:text-amber-200 mb-1">
+                      Hlasování je v režimu pouze pro čtení
+                    </h4>
+                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                      {vote.status === 'active' && 'Hlasování právě probíhá, změny nejsou možné.'}
+                      {vote.status === 'closed' && 'Hlasování bylo ukončeno, změny nejsou možné.'}
+                      {vote.status === 'cancelled' && 'Hlasování bylo zrušeno, změny nejsou možné.'}
+                      {!['active', 'closed', 'cancelled'].includes(vote.status) && 'Hlasování nelze upravovat v současném stavu.'}
+                      {' '}Můžete si prohlédnout všechny detaily včetně otázek.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            )}
+
             <Card className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
@@ -138,15 +159,33 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
                 </div>
                 <div className="flex space-x-2">
                   {vote.status === 'draft' && (
-                    <Button onClick={handleStartVote} size="sm">
+                    <Button onClick={handleStartVote} size="sm" className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-green-600 rounded-md hover:bg-green-700 hover:border-green-700 transition-colors duration-200 shadow-sm">
                       <Play className="w-4 h-4 mr-2" />
                       Spustit hlasování
                     </Button>
                   )}
-                  <Button onClick={handleEdit} size="sm">
-                    <Edit className="w-4 h-4 mr-2" />
-                    Upravit
-                  </Button>
+                  
+                  {/* Tlačítko upravit - aktivní pouze pokud hlasování není aktivní */}
+                  {vote.status === 'draft' || vote.status === 'scheduled' ? (
+                    <Button 
+                      onClick={handleEdit} 
+                      size="sm" 
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-md hover:bg-blue-700 hover:border-blue-700 transition-colors duration-200 shadow-sm focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Upravit hlasování
+                    </Button>
+                  ) : (
+                    <Button 
+                      disabled 
+                      size="sm" 
+                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-500 bg-gray-200 border border-gray-200 rounded-md cursor-not-allowed shadow-sm dark:bg-gray-700 dark:text-gray-400 dark:border-gray-600"
+                      title="Hlasování nelze upravovat během běhu nebo po ukončení"
+                    >
+                      <Edit className="w-4 h-4 mr-2 opacity-50" />
+                      Nelze upravit
+                    </Button>
+                  )}
                 </div>
               </div>
               <div className="prose dark:prose-invert max-w-none">
@@ -184,9 +223,17 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
             )}
 
             <Card className="p-6">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-                Hlasovací otázky
-              </h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  Hlasovací otázky
+                </h3>
+                {vote.status !== 'draft' && vote.status !== 'scheduled' && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/20 dark:text-amber-400">
+                    <AlertCircle className="w-3 h-3 mr-1" />
+                    Pouze pro čtení
+                  </span>
+                )}
+              </div>
               <div className="space-y-4">
                 {(() => {
                   const raw: unknown = vote?.questions;
@@ -211,16 +258,44 @@ export const VoteDetailView: React.FC<VoteDetailViewProps> = ({
 
                   return (parsed as unknown[]).map((question, index: number) => {
                     const q = question as any;
+                    const isReadOnly = vote.status !== 'draft' && vote.status !== 'scheduled';
                     return (
-                      <div key={q?.id || index} className="border-l-4 border-blue-500 pl-4">
-                        <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                          {index + 1}. {q?.text || q?.title || q?.question_text}
-                        </h4>
-                        {q?.type && (
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Typ: {q.type}
-                          </p>
-                        )}
+                      <div 
+                        key={q?.id || index} 
+                        className={`border-l-4 pl-4 p-4 rounded-r-lg transition-colors ${
+                          isReadOnly 
+                            ? 'border-gray-400 bg-gray-50 dark:bg-gray-700/50 dark:border-gray-500' 
+                            : 'border-blue-500 bg-blue-50/30 dark:bg-blue-900/10 dark:border-blue-400'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className={`font-medium mb-2 ${
+                              isReadOnly 
+                                ? 'text-gray-700 dark:text-gray-300' 
+                                : 'text-gray-900 dark:text-gray-100'
+                            }`}>
+                              {index + 1}. {q?.text || q?.title || q?.question_text}
+                            </h4>
+                            {q?.type && (
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm px-2 py-1 rounded-md ${
+                                  isReadOnly
+                                    ? 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-400'
+                                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                }`}>
+                                  Typ: {q.type}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          {isReadOnly && (
+                            <div className="ml-4 text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                              <AlertCircle className="w-3 h-3 mr-1" />
+                              Neupravitelné
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   });
