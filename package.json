@@ -31,6 +31,8 @@
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.344.0",
+    "node-fetch": "^2.7.0",
+    "node-mailjet": "^6.0.9",
     "nodemailer": "^6.9.13",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

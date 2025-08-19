@@ -57,6 +57,32 @@ Audit: Pokud narazíte na import `../data/mockData`, jde o relikt – odstraňte
    ```
 
 2. **Instalace závislostí**
+
+# Nastavení e-mailů (Mailjet) a SMS (smsbrana.cz)
+
+## Odesílání e-mailů přes Mailjet
+- V souboru `.env` musí být nastaveny tyto proměnné:
+   - `MAILJET_API_KEY`, `MAILJET_API_SECRET`, `MAILJET_FROM_EMAIL`, `MAILJET_FROM_NAME`
+- Pro testování použij skript `mailjet-test.js`:
+   - Spusť: `node mailjet-test.js`
+   - Odesílá testovací e-mail na zadanou adresu.
+
+## Odesílání SMS přes smsbrana.cz
+- V souboru `.env` musí být:
+   - `VITE_SMSBRANA_LOGIN`, `VITE_SMSBRANA_PASSWORD`
+- V administraci smsbrana.cz nastav:
+   - Typ přihlášení: **Jednoduché**
+   - Přístupové IP adresy: `*` (pro testování, pro produkci zadej konkrétní IP)
+- Pro testování použij skript `smsbrana-test.js`:
+   - Spouští se: `node smsbrana-test.js`
+   - Odesílá SMS na číslo zapsané ve skriptu.
+- Skript používá GET požadavek na endpoint:
+   - `https://api.smsbrana.cz/smsconnect/http.php?action=send_sms&login=...&password=...&number=...&message=...`
+- Pokud dostaneš `<err>0</err>`, SMS byla úspěšně odeslána.
+
+**Poznámka:**
+- Pokud změníš nastavení v administraci smsbrana.cz, vždy jej ulož a případně chvíli počkej na propagaci změn.
+- Pro produkci doporučujeme omezit IP adresy a případně přejít na pokročilé přihlášení (hash).
    ```bash
    npm install
    ```
