@@ -33,6 +33,7 @@ interface EmailTemplate {
   name: string;
   subject: string;
   body: string;
+  building_id?: string;
 }
 
 interface VoteVariable {
@@ -104,6 +105,11 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
   const [representedEmailBody, setRepresentedEmailBody] = useState('');
   const [reminderEmailSubject, setReminderEmailSubject] = useState('');
   const [reminderEmailBody, setReminderEmailBody] = useState('');
+  
+  // Stavy pro výběr šablon
+  const [selectedRepresentativeTemplate, setSelectedRepresentativeTemplate] = useState('');
+  const [selectedRepresentedTemplate, setSelectedRepresentedTemplate] = useState('');
+  const [selectedReminderTemplate, setSelectedReminderTemplate] = useState('');
 
   // Načtení e-mailových šablon
   const { data: templatesData } = useQuery(GET_EMAIL_TEMPLATES, {
@@ -121,11 +127,48 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
   const { data: globalsData } = useQuery(GET_GLOBAL_VARIABLES);
 
   const templates = templatesData?.email_templates || [];
-  const buildingTemplates = templates.filter((t: EmailTemplate) => t.building_id === buildingId);
+  const buildingTemplates = templates.filter((t: EmailTemplate) => t.building_id === buildingId || !t.building_id);
+
+  // Funkce pro načtení šablony a nastavení textů
+  const handleTemplateSelect = (templateId: string, type: 'representative' | 'represented' | 'reminder') => {
+    if (!templateId) return;
+    
+    const template = buildingTemplates.find((t: EmailTemplate) => t.id === templateId);
+    if (!template) return;
+
+    const sampleMember = membersData?.members?.[0];
+    const globalVars = globalsData?.global_variables || [];
+    const mockBuilding = { id: buildingId, name: 'Vybraná budova', variables: {} };
+    
+    const processedSubject = sampleMember && globalVars 
+      ? replaceVariables(template.subject, globalVars, mockBuilding, sampleMember)
+      : template.subject;
+    const processedBody = sampleMember && globalVars
+      ? replaceVariables(template.body, globalVars, mockBuilding, sampleMember)
+      : template.body;
+
+    switch (type) {
+      case 'representative':
+        setSelectedRepresentativeTemplate(templateId);
+        setRepresentativeEmailSubject(processedSubject);
+        setRepresentativeEmailBody(processedBody);
+        break;
+      case 'represented':
+        setSelectedRepresentedTemplate(templateId);
+        setRepresentedEmailSubject(processedSubject);
+        setRepresentedEmailBody(processedBody);
+        break;
+      case 'reminder':
+        setSelectedReminderTemplate(templateId);
+        setReminderEmailSubject(processedSubject);
+        setReminderEmailBody(processedBody);
+        break;
+    }
+  };
 
   // Funkce pro náhled šablony s nahrazením proměnných
   const getTemplatePreview = (templateId: string) => {
-    const template = buildingTemplates.find(t => t.id === templateId);
+    const template = buildingTemplates.find((t: EmailTemplate) => t.id === templateId);
     const sampleMember = membersData?.members?.[0];
     const globalVars = globalsData?.global_variables || [];
     
@@ -362,6 +405,25 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Vybrat šablonu (volitelné)
+                </label>
+                <select
+                  value={selectedRepresentativeTemplate}
+                  onChange={(e) => handleTemplateSelect(e.target.value, 'representative')}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  aria-label="Vybrat šablonu pro zástupce"
+                >
+                  <option value="">-- Vyberte šablonu --</option>
+                  {buildingTemplates.map((template: EmailTemplate) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Předmět e-mailu *
                 </label>
                 <Input
@@ -412,6 +474,25 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Vybrat šablonu (volitelné)
+                </label>
+                <select
+                  value={selectedRepresentedTemplate}
+                  onChange={(e) => handleTemplateSelect(e.target.value, 'represented')}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  aria-label="Vybrat šablonu pro zastoupeného"
+                >
+                  <option value="">-- Vyberte šablonu --</option>
+                  {buildingTemplates.map((template: EmailTemplate) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Předmět e-mailu *
                 </label>
                 <Input
@@ -460,6 +541,25 @@ export const VoteFormView: React.FC<VoteFormViewProps> = ({ vote, onBack, buildi
               E-mail upomínky pro nehlasující
             </h3>
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Vybrat šablonu (volitelné)
+                </label>
+                <select
+                  value={selectedReminderTemplate}
+                  onChange={(e) => handleTemplateSelect(e.target.value, 'reminder')}
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  aria-label="Vybrat šablonu pro upomínku"
+                >
+                  <option value="">-- Vyberte šablonu --</option>
+                  {buildingTemplates.map((template: EmailTemplate) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Předmět e-mailu *

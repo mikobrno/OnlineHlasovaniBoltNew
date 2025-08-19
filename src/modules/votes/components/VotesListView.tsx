@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Search, Vote as VoteIcon, Clock, Users, CheckCircle } from 'lucide-react';
 import { useQuery } from '@apollo/client';
-import { useApp } from '@/contexts';
 import { Input, Card } from '@/components/common';
 import { VoteCard } from './VoteCard';
 import { VoteDetailView } from './VoteDetailView';
@@ -12,16 +11,24 @@ import { FullPageSpinner } from '../../../components/FullPageSpinner';
 import type { Vote } from '../types';
 import { GET_VOTES_QUERY } from './queries';
 
-export const VotesListView: React.FC = () => {
-  const { selectedBuilding } = useApp();
+interface VotesListViewProps {
+  buildingId: string;
+}
+
+export const VotesListView: React.FC<VotesListViewProps> = ({ buildingId }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingVote, setEditingVote] = useState<Vote | null>(null);
   const [selectedVote, setSelectedVote] = useState<Vote | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Validate buildingId  
+  const isValidBuildingId = typeof buildingId === 'string' && 
+    buildingId.trim().length > 0 && 
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(buildingId.trim());
+
   const { data, loading, error } = useQuery(GET_VOTES_QUERY, {
-    variables: { buildingId: selectedBuilding?.id },
-    skip: !selectedBuilding,
+    variables: { buildingId },
+    skip: !isValidBuildingId,
   });
 
   const filteredVotes = useMemo(() => {
@@ -31,8 +38,8 @@ export const VotesListView: React.FC = () => {
     );
   }, [data?.votes, searchTerm]);
 
-  if (!selectedBuilding) {
-    return <div>Vyberte budovu pro zobrazení hlasování.</div>;
+  if (!isValidBuildingId) {
+    return <div>Neplatné ID budovy pro zobrazení hlasování.</div>;
   }
   
   if (loading) {
@@ -66,7 +73,7 @@ export const VotesListView: React.FC = () => {
           setShowForm(false);
           setEditingVote(null);
         }}
-        buildingId={selectedBuilding.id}
+        buildingId={buildingId}
       />
     );
   }
@@ -77,7 +84,7 @@ export const VotesListView: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Přehled hlasování</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Spravujte hlasování pro budovu {selectedBuilding.name}
+            Spravujte hlasování pro vybranou budovu
           </p>
         </div>
         <button
@@ -196,5 +203,3 @@ export const VotesListView: React.FC = () => {
     </div>
   );
 };
-
-export { GET_VOTES_QUERY };

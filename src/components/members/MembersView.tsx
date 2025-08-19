@@ -19,6 +19,13 @@ interface MembersViewProps {
 }
 
 export const MembersView: React.FC<MembersViewProps> = ({ buildingId }) => {
+  // Strict validation - buildingId must be a valid UUID-like string
+  const isValidBuildingId = typeof buildingId === 'string' && 
+    buildingId.trim().length > 0 && 
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(buildingId.trim());
+  
+  const validBuildingId = isValidBuildingId ? buildingId.trim() : null;
+  
   const { showToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -26,8 +33,8 @@ export const MembersView: React.FC<MembersViewProps> = ({ buildingId }) => {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
   const { data, loading, error, refetch } = useQuery(GET_MEMBERS, {
-    variables: { buildingId },
-    skip: !buildingId,
+    variables: { buildingId: validBuildingId },
+    skip: !validBuildingId,
   });
 
   const [deleteMemberMutation] = useMutation(DELETE_MEMBER, {
@@ -74,7 +81,7 @@ export const MembersView: React.FC<MembersViewProps> = ({ buildingId }) => {
     refetch();
   };
 
-  if (!buildingId) {
+  if (!validBuildingId) {
     return (
         <div className="text-center py-12">
             <h2 className="text-xl font-semibold text-gray-600 dark:text-gray-300">Vyberte budovu</h2>

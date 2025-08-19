@@ -23,20 +23,27 @@ interface ObserversViewProps {
 
 export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }) => {
   const { showToast } = useToast();
+  // Strict validation - buildingId must be a valid UUID-like string
+  const isValidBuildingId = typeof buildingId === 'string' && 
+    buildingId.trim().length > 0 && 
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(buildingId.trim());
+  
+  const validBuildingId = isValidBuildingId ? buildingId.trim() : null;
+  
   const [showAddModal, setShowAddModal] = useState(false);
   const [newObserver, setNewObserver] = useState({ name: '', email: '' });
 
   const { data: observersData, loading: observersLoading, refetch: refetchObservers } = useQuery(GET_OBSERVERS_BY_BUILDING_ID, {
-    variables: { buildingId },
-    skip: !buildingId,
+    variables: { buildingId: validBuildingId },
+    skip: !validBuildingId,
   });
 
   // Observers v votes jsou pole emailů z JSONB pole observers_list
   const voteObserverEmails = vote.observers_list || [];
   const buildingObservers: Observer[] = observersData?.observers || [];
   
-  // Počet pozorovatelů z observers_aggregate
-  const observersCount = vote.observers_aggregate?.aggregate?.count || 0;
+  // Počet pozorovatelů z observers_aggregate (momentálně nepoužito)
+  // const observersCount = vote.observers_aggregate?.aggregate?.count || 0;
   
   const voteObservers = buildingObservers.filter(o => voteObserverEmails.includes(o.email));
   const availableObservers = buildingObservers.filter(o => !voteObserverEmails.includes(o.email));
@@ -66,7 +73,7 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
         variables: {
           name: newObserver.name.trim(),
           email: newObserver.email.trim(),
-          building_id: buildingId,
+          building_id: validBuildingId,
         },
       });
       const createdObserver = data?.insert_observers_one;
@@ -91,7 +98,7 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
 
   const handleAddExistingObserver = async (observer: Observer) => {
     try {
-      await addObserverToVote({ variables: { vote_id: vote.id, observer_email: observer.email } });
+  await addObserverToVote({ variables: { vote_id: vote.id, observer_email: observer.email } });
       showToast('Pozorovatel byl přidán k hlasování.', 'success');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Neznámá chyba';
@@ -102,7 +109,7 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
   const handleRemoveObserver = async (observer: Observer) => {
     if (window.confirm('Opravdu chcete odebrat tohoto pozorovatele z hlasování?')) {
       try {
-        await removeObserverFromVote({ variables: { vote_id: vote.id, observer_email: observer.email } });
+  await removeObserverFromVote({ variables: { vote_id: vote.id, observer_email: observer.email } });
         showToast('Pozorovatel byl odebrán z hlasování.', 'success');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Neznámá chyba';
@@ -286,7 +293,7 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
           <Input
             label="Jméno *"
             value={newObserver.name}
-            onChange={(e) => setNewObserver({ ...newObserver, name: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewObserver({ ...newObserver, name: e.target.value })}
             placeholder="Jan Novák"
           />
           
@@ -294,7 +301,7 @@ export const ObserversView: React.FC<ObserversViewProps> = ({ vote, buildingId }
             label="E-mail *"
             type="email"
             value={newObserver.email}
-            onChange={(e) => setNewObserver({ ...newObserver, email: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewObserver({ ...newObserver, email: e.target.value })}
             placeholder="jan.novak@email.cz"
           />
 

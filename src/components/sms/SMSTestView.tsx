@@ -154,10 +154,20 @@ export const SMSTestView: React.FC = () => {
                   {creditInfo.credit !== undefined ? '💰 Kredit dostupný' : '❌ Chyba kreditu'}
                 </p>
                 <p className="text-sm mt-1">{creditInfo.message}</p>
+                {/* Vždy zobrazit raw odpověď, pokud je k dispozici */}
                 {creditInfo.rawResult && (
+                  <div className="mt-2">
+                    <div className="text-xs font-semibold mb-1">Surová odpověď API:</div>
+                    <code className="text-xs block whitespace-pre-wrap break-all">{creditInfo.rawResult}</code>
+                  </div>
+                )}
+                {/* Pokud jsou pokusy o parsování, zobrazit i je */}
+                {creditInfo.debugInfo?.patterns && (
                   <details className="mt-2">
-                    <summary className="text-xs cursor-pointer">Detaily odpovědi</summary>
-                    <code className="text-xs mt-1 block">{creditInfo.rawResult}</code>
+                    <summary className="text-xs cursor-pointer">Debug parsing kreditu</summary>
+                    {creditInfo.debugInfo.patterns.map((pattern, idx) => (
+                      <div key={idx} className="text-xs">{pattern}</div>
+                    ))}
                   </details>
                 )}
               </div>
