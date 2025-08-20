@@ -22,11 +22,13 @@
   "dependencies": {
     "@apollo/client": "^3.13.9",
     "@google/generative-ai": "^0.24.1",
+    "@headlessui/react": "^2.2.7",
     "@hookform/resolvers": "^5.2.1",
     "@nhost/nhost-js": "^3.3.0",
     "@nhost/react": "^3.11.1",
     "@nhost/react-apollo": "^18.0.1",
     "@testing-library/react": "^16.3.0",
+    "clsx": "^2.1.1",
     "graphql": "^16.11.0",
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
@@ -38,7 +40,9 @@
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.62.0",
     "react-router-dom": "^7.7.1",
-    "zod": "^4.0.17"
+    "tailwind-merge": "^3.3.1",
+    "zod": "^4.0.17",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

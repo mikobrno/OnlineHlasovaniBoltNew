@@ -5,8 +5,6 @@
 export interface Building {
   id: string;
   name: string;
-  address: string;
-  total_units: number;
 }
 
 // Základní typ pro Člena
@@ -25,9 +23,11 @@ export interface Member {
 export interface Question {
   id: string;
   text: string;
+  description?: string; // Přidána chybějící vlastnost
   quorum_type: string;
   custom_quorum_numerator?: number;
   custom_quorum_denominator?: number;
+  order_index: number; // Přidána chybějící vlastnost
 }
 
 // Typy pro Nhost autentizaci
@@ -54,23 +54,11 @@ export interface Vote {
   created_at: string;
   start_date?: string;
   end_date?: string;
-  manual_vote_attachments?: Array<{
-    id: string;
-    attachment_name: string;
-    created_at: string;
-    member?: {
-      id: string;
-      name: string;
-      unit: string;
-    };
-  }>;
-  observers_list?: string[];
-  observers_aggregate?: {
-    aggregate: {
-      count: number;
-    };
-  };
-  memberVotes?: Record<string, Record<string, 'yes' | 'no' | 'abstain'>>;
+  // Tyto vlastnosti přidáváme pro kompatibilitu
+  buildingId?: string;
+  startDate?: string;
+  endDate?: string;
+  memberVotes?: any;
 }
 
 // Typ pro Observer (Pozorovatel)

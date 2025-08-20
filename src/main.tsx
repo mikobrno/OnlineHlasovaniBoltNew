@@ -1,4 +1,4 @@
-import React, { StrictMode, useState, useEffect } from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
@@ -7,40 +7,28 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { AppProvider } from './contexts/AppContext';
-import { NhostProvider } from '@nhost/react';
-import { ApolloProvider } from '@apollo/client';
-import { nhost, apolloClient } from './lib/apolloClient';
+import { NhostProvider, NhostClient } from '@nhost/react';
+import { NhostApolloProvider } from '@nhost/react-apollo';
 
-// Bootstrap component: vyčistí případné staré tokeny pokud není platná session (prevents initial 401 spam)
-// Bootstrap oddělí čištění storage před mountem providerů.
-const Bootstrap: React.FC = () => {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    // Jednoduše nastavíme ready na true bez mazání localStorage
-    setReady(true);
-  }, []);
-  if (!ready) return null;
-  return (
-    <NhostProvider nhost={nhost}>
-      <AuthProvider>
-        <ApolloProvider client={apolloClient}>
-          <BrowserRouter>
-            <ToastProvider>
-              <ThemeProvider>
-                <AppProvider>
-                  <App />
-                </AppProvider>
-              </ThemeProvider>
-            </ToastProvider>
-          </BrowserRouter>
-        </ApolloProvider>
-      </AuthProvider>
-    </NhostProvider>
-  );
-};
+const nhost = new NhostClient({
+  subdomain: 'zde_doplnit_subdomain',
+  region: 'zde_doplnit_region'
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Bootstrap />
+    <BrowserRouter>
+      <NhostProvider nhost={nhost}>
+        <NhostApolloProvider nhost={nhost}>
+          <ToastProvider>
+            <ThemeProvider>
+              <AuthProvider>
+                <App />
+              </AuthProvider>
+            </ThemeProvider>
+          </ToastProvider>
+        </NhostApolloProvider>
+      </NhostProvider>
+    </BrowserRouter>
   </StrictMode>
 );

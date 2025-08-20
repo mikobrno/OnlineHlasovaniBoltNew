@@ -2,6 +2,11 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+console.log('process.env.VITE_NHOST_BACKEND_URL:', process.env.VITE_NHOST_BACKEND_URL);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
